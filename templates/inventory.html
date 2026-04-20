@@ -2,14 +2,23 @@
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+
 <style>
+body {
+    font-size: 20px;
+}
 .card {
     border:1px solid #ddd;
-    padding:10px;
+    padding:20px;
     margin:10px;
 }
-.red {
-    color:red;
+button {
+    font-size: 20px;
+    padding: 10px;
+}
+input {
+    font-size: 20px;
+    padding: 5px;
 }
 </style>
 </head>
@@ -24,49 +33,104 @@
 <button onclick="download()">엑셀 다운로드</button>
 
 <script>
+
 let data = {{ data | tojson }};
+let currentIndex = 0;
 
+
+// 화면 표시
 function render(){
-    let html = '';
+    let item = data[currentIndex];
 
-    data.forEach((item, i) => {
-        html += `
-        <div class="card">
-            <b>${item['랙번호']}</b><br>
-            품명: ${item['품명']}<br>
-            소비기한: ${item['소비기한']}<br>
-            전산수량: ${item['전산수량']}<br>
+    let html = `
+    <div class="card">
 
-            실수량:
-            <input type="number" onchange="update(${i}, this.value)">
-            
-            <div id="diff-${i}">차이: </div>
-        </div>
-        `;
-    });
+        <h3>${currentIndex + 1} / ${data.length}</h3>
+
+        <b>${item['랙번호']}</b><br>
+        품명: ${item['품명'] || ''}<br>
+        소비기한: ${item['소비기한'] || ''}<br>
+        전산수량: ${item['전산수량']}<br><br>
+
+        실수량:
+        <input type="number" id="realInput" 
+            value="${item['실수량'] || ''}"
+            onchange="updateValue(this.value)">
+        
+        <div id="diff">차이: ${item['차이'] || 0}</div>
+
+        <br><br>
+        <button onclick="prev()">이전</button>
+        <button onclick="next()">다음</button>
+
+    </div>
+    `;
 
     document.getElementById('list').innerHTML = html;
+
+    setTimeout(() => {
+        document.getElementById('realInput').focus();
+    }, 100);
 }
 
-function update(i, value){
+
+// 값 입력 시 계산
+function updateValue(value){
     let real = parseInt(value || 0);
-    let stock = data[i]['전산수량'];
+    let stock = data[currentIndex]['전산수량'];
 
     let diff = real - stock;
 
-    data[i]['실수량'] = real;
-    data[i]['차이'] = diff;
+    data[currentIndex]['실수량'] = real;
+    data[currentIndex]['차이'] = diff;
 
-    let el = document.getElementById(`diff-${i}`);
+    let el = document.getElementById('diff');
     el.innerText = '차이: ' + diff;
 
     if(diff !== 0){
-        el.classList.add('red');
+        el.style.color = 'red';
     }else{
-        el.classList.remove('red');
+        el.style.color = 'black';
     }
 }
 
+
+// 다음
+function next(){
+    if(!data[currentIndex]['실수량'] && data[currentIndex]['실수량'] !== 0){
+        alert('실수량 입력하세요');
+        return;
+    }
+
+    if(currentIndex < data.length - 1){
+        currentIndex++;
+        render();
+    }else{
+        alert('마지막입니다');
+    }
+}
+
+
+// 이전
+function prev(){
+    if(currentIndex > 0){
+        currentIndex--;
+        render();
+    }else{
+        alert('처음입니다');
+    }
+}
+
+
+// 엔터 → 다음 이동
+document.addEventListener('keydown', function(e){
+    if(e.key === 'Enter'){
+        next();
+    }
+});
+
+
+// 저장
 function saveData(){
     fetch('/save', {
         method:'POST',
@@ -76,11 +140,26 @@ function saveData(){
     .then(()=>alert('저장 완료'));
 }
 
+
+// 다운로드
 function download(){
     window.location = '/download';
 }
 
+
+// 자동 저장 (30초)
+setInterval(() => {
+    fetch('/save', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(data)
+    });
+}, 30000);
+
+
+// 시작
 render();
+
 </script>
 
 </body>
