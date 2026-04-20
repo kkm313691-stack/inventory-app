@@ -1,24 +1,22 @@
-from flask import Flask, render_template, request, send_file, session
+from flask import Flask, render_template, request, send_file
 import pandas as pd
 import os
 from io import BytesIO
-import uuid
 
 app = Flask(__name__)
-app.secret_key = 'secret-key'  # 세션용
 
 UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 
-# 👉 컬럼 자동 매핑 함수
+# 🔥 컬럼 자동 매핑 (완전 안정 버전)
 def map_columns(df):
     df.columns = df.columns.str.strip()
 
     col_map = {}
 
     for col in df.columns:
-        c = col.lower()
+        c = col.lower().replace(" ", "")
 
         if '상품' in c or '품명' in c:
             col_map[col] = '상품명'
@@ -43,13 +41,11 @@ def map_columns(df):
     return df
 
 
-# 메인
 @app.route('/')
 def index():
     return render_template('upload.html')
 
 
-# 업로드
 @app.route('/upload', methods=['POST'])
 def upload():
     try:
@@ -63,26 +59,20 @@ def upload():
 
         df = pd.read_excel(filepath)
 
-        # 🔥 컬럼 자동 매핑
+        # 🔥 컬럼 자동 변환
         df = map_columns(df)
 
-        # 정렬
         df = df.sort_values(by='로케이션')
 
-        # 초기값
         df['실수량'] = ''
         df['차이'] = 0
 
-        # 👉 세션에 저장 (사용자별)
-        session['data'] = df.to_dict(orient='records')
-
-        return render_template('inventory.html', data=session['data'])
+        return render_template('inventory.html', data=df.to_dict(orient='records'))
 
     except Exception as e:
         return f"업로드 오류: {str(e)}"
 
 
-# 다운로드 (동시 사용자 대응)
 @app.route('/download', methods=['POST'])
 def download():
     try:
