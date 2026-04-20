@@ -29,7 +29,6 @@ input {
 
 <div id="list"></div>
 
-<button onclick="saveData()">저장</button>
 <button onclick="download()">엑셀 다운로드</button>
 
 <script>
@@ -74,7 +73,7 @@ function render(){
 }
 
 
-// 값 입력 시 계산
+// 값 입력
 function updateValue(value){
     let real = parseInt(value || 0);
     let stock = data[currentIndex]['전산수량'];
@@ -97,7 +96,7 @@ function updateValue(value){
 
 // 다음
 function next(){
-    if(!data[currentIndex]['실수량'] && data[currentIndex]['실수량'] !== 0){
+    if(data[currentIndex]['실수량'] === '' || data[currentIndex]['실수량'] === null){
         alert('실수량 입력하세요');
         return;
     }
@@ -130,31 +129,22 @@ document.addEventListener('keydown', function(e){
 });
 
 
-// 저장
-function saveData(){
-    fetch('/save', {
+// 🔥 엑셀 다운로드 (서버 저장 없이 바로)
+function download(){
+    fetch('/download', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body: JSON.stringify(data)
     })
-    .then(()=>alert('저장 완료'));
-}
-
-
-// 다운로드
-function download(){
-    window.location = '/download';
-}
-
-
-// 자동 저장 (30초)
-setInterval(() => {
-    fetch('/save', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify(data)
+    .then(res => res.blob())
+    .then(blob => {
+        let url = window.URL.createObjectURL(blob);
+        let a = document.createElement('a');
+        a.href = url;
+        a.download = '재고조사결과.xlsx';
+        a.click();
     });
-}, 30000);
+}
 
 
 // 시작
