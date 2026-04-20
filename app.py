@@ -20,35 +20,53 @@ def index():
 def upload():
     global data_df
 
-    file = request.files['file']
-    filepath = os.path.join(UPLOAD_FOLDER, file.filename)
-    file.save(filepath)
+    try:
+        file = request.files['file']
 
-    df = pd.read_excel(filepath)
+        if file.filename == '':
+            return "파일이 없습니다."
 
-    df = df.sort_values(by='랙번호')
+        filepath = os.path.join(UPLOAD_FOLDER, file.filename)
+        file.save(filepath)
 
-    df['실수량'] = 0
-    df['차이'] = 0
+        df = pd.read_excel(filepath)
 
-    data_df = df
+        # 컬럼 공백 제거
+        df.columns = df.columns.str.strip()
 
-    return render_template('inventory.html', data=df.to_dict(orient='records'))
+        # 필수 컬럼 체크
+        required_columns = ['랙번호', '품명', '소비기한', '전산수량']
+        for col in required_columns:
+            if col not in df.columns:
+                return f"엑셀 컬럼 오류: '{col}' 컬럼이 없습니다."
+
+        # 정렬
+        df = df.sort_values(by='랙번호')
+
+        df['실수량'] = 0
+        df['차이'] = 0
+
+        data_df = df
+
+        return render_template('inventory.html', data=df.to_dict(orient='records'))
+
+    except Exception as e:
+        return f"에러 발생: {str(e)}"
 
 
 @app.route('/save', methods=['POST'])
 def save():
-    global data_df
+    try:
+        results = request.json
+        df = pd.DataFrame(results)
 
-    results = request.json
+        df['차이'] = df['실수량'] - df['전산수량']
+        df.to_excel(RESULT_FILE, index=False)
 
-    df = pd.DataFrame(results)
+        return {'status': 'success'}
 
-    df['차이'] = df['실수량'] - df['전산수량']
-
-    df.to_excel(RESULT_FILE, index=False)
-
-    return {'status': 'success'}
+    except Exception as e:
+        return {'status': 'error', 'message': str(e)}
 
 
 @app.route('/download')
