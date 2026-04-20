@@ -1,15 +1,13 @@
 from flask import Flask, render_template, request, send_file
 import pandas as pd
 import os
+from io import BytesIO
 
 app = Flask(__name__)
 
 UPLOAD_FOLDER = 'uploads'
-RESULT_FILE = 'result.xlsx'
-
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-data_df = None
 
 @app.route('/')
 def index():
@@ -18,8 +16,6 @@ def index():
 
 @app.route('/upload', methods=['POST'])
 def upload():
-    global data_df
-
     try:
         file = request.files['file']
 
@@ -46,32 +42,34 @@ def upload():
         df['실수량'] = 0
         df['차이'] = 0
 
-        data_df = df
-
         return render_template('inventory.html', data=df.to_dict(orient='records'))
 
     except Exception as e:
         return f"에러 발생: {str(e)}"
 
 
-@app.route('/save', methods=['POST'])
-def save():
+# 🔥 파일 저장 없이 바로 엑셀 다운로드
+@app.route('/download', methods=['POST'])
+def download():
     try:
         results = request.json
         df = pd.DataFrame(results)
 
         df['차이'] = df['실수량'] - df['전산수량']
-        df.to_excel(RESULT_FILE, index=False)
 
-        return {'status': 'success'}
+        output = BytesIO()
+        df.to_excel(output, index=False)
+        output.seek(0)
+
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name="재고조사결과.xlsx",
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
 
     except Exception as e:
-        return {'status': 'error', 'message': str(e)}
-
-
-@app.route('/download')
-def download():
-    return send_file(RESULT_FILE, as_attachment=True)
+        return f"다운로드 오류: {str(e)}"
 
 
 if __name__ == '__main__':
