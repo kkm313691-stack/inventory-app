@@ -4,24 +4,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <style>
-body {
-    font-size: 20px;
-}
-.card {
-    border:1px solid #ddd;
-    padding:20px;
-    margin:10px;
-}
-button {
-    font-size: 20px;
-    padding: 10px;
-    margin:5px;
-}
-input {
-    font-size: 20px;
-    padding: 5px;
-    width: 100%;
-}
+body { font-size:20px; }
+.card { border:1px solid #ddd; padding:20px; margin:10px; }
+button { font-size:20px; padding:10px; margin:5px; }
+input { font-size:20px; padding:5px; width:100%; }
 </style>
 </head>
 
@@ -39,19 +25,35 @@ let data = {{ data | tojson }};
 let currentIndex = 0;
 
 
+// 🔥 안전하게 값 가져오는 함수 (핵심)
+function getValue(item, keys, defaultVal=''){
+    for(let k of keys){
+        if(item[k] !== undefined && item[k] !== null){
+            return item[k];
+        }
+    }
+    return defaultVal;
+}
+
+
 // 화면 표시
 function render(){
     let item = data[currentIndex];
+
+    let location = getValue(item, ['로케이션','랙번호','위치']);
+    let name = getValue(item, ['상품명','품명']);
+    let stock = getValue(item, ['재고수량','전산수량'], 0);
+    let exp = getValue(item, ['소비기한']);
 
     let html = `
     <div class="card">
 
         <h3>${currentIndex + 1} / ${data.length}</h3>
 
-        <b>${item['로케이션']}</b><br>
-        상품명: ${item['상품명'] || ''}<br>
-        소비기한: ${item['소비기한'] || ''}<br>
-        재고수량: ${item['재고수량']}<br><br>
+        <b>${location}</b><br>
+        상품명: ${name}<br>
+        소비기한: ${exp}<br>
+        재고수량: ${stock}<br><br>
 
         실수량:
         <input type="number" id="realInput" 
@@ -69,31 +71,30 @@ function render(){
 
     document.getElementById('list').innerHTML = html;
 
-    // 입력창 자동 포커스
     setTimeout(() => {
         document.getElementById('realInput').focus();
     }, 100);
 }
 
 
-// 값 입력 시 계산
+// 값 입력
 function updateValue(value){
-    let real = parseInt(value || 0);
-    let stock = parseInt(data[currentIndex]['재고수량'] || 0);
+    let item = data[currentIndex];
 
+    let stock = parseInt(
+        getValue(item, ['재고수량','전산수량'], 0)
+    );
+
+    let real = parseInt(value || 0);
     let diff = real - stock;
 
-    data[currentIndex]['실수량'] = real;
-    data[currentIndex]['차이'] = diff;
+    item['실수량'] = real;
+    item['차이'] = diff;
 
     let el = document.getElementById('diff');
     el.innerText = '차이: ' + diff;
 
-    if(diff !== 0){
-        el.style.color = 'red';
-    }else{
-        el.style.color = 'black';
-    }
+    el.style.color = diff !== 0 ? 'red' : 'black';
 }
 
 
@@ -124,7 +125,7 @@ function prev(){
 }
 
 
-// 엔터 → 다음 이동 (PDA 최적화)
+// 엔터 이동
 document.addEventListener('keydown', function(e){
     if(e.key === 'Enter'){
         next();
@@ -132,33 +133,20 @@ document.addEventListener('keydown', function(e){
 });
 
 
-// 🔥 엑셀 다운로드 (POST 방식)
+// 다운로드
 function downloadExcel(){
     fetch('/download', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
         body: JSON.stringify(data)
     })
-    .then(response => {
-        if(!response.ok){
-            throw new Error('서버 오류');
-        }
-        return response.blob();
-    })
+    .then(res => res.blob())
     .then(blob => {
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
+        let url = window.URL.createObjectURL(blob);
+        let a = document.createElement('a');
         a.href = url;
         a.download = '재고조사결과.xlsx';
-        document.body.appendChild(a);
         a.click();
-        a.remove();
-        window.URL.revokeObjectURL(url);
-    })
-    .catch(error => {
-        alert('다운로드 실패: ' + error);
     });
 }
 
