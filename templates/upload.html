@@ -1,17 +1,73 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>아워박스 오산센터 PDA 검수</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<style>
+body {
+    font-size: 22px;
+    padding: 20px;
+    background-color: #f5f5f5;
+}
+
+/* 카드 스타일 */
+.container {
+    background: white;
+    padding: 30px;
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+}
+
+/* 제목 */
+h1 {
+    font-size: 28px;
+    margin-bottom: 10px;
+}
+
+h2 {
+    font-size: 22px;
+    margin-bottom: 20px;
+}
+
+/* 파일 선택 */
+input[type="file"] {
+    font-size: 20px;
+    padding: 15px;
+    width: 100%;
+    margin-bottom: 20px;
+}
+
+/* 버튼 */
+button {
+    width: 100%;
+    font-size: 24px;
+    padding: 15px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 8px;
+}
+
+/* 버튼 클릭 효과 */
+button:active {
+    background-color: #0056b3;
+}
+</style>
 </head>
+
 <body>
 
-    <h1> 아워박스 오산센터</h1>
+<div class="container">
+
+    <h1>아워박스 오산센터</h1>
     <h2>PDA 재고 검수 시스템</h2>
 
     <form action="/upload" method="post" enctype="multipart/form-data">
         <input type="file" name="file" required>
         <button type="submit">엑셀 업로드</button>
     </form>
+
+</div>
 
 </body>
 </html>
