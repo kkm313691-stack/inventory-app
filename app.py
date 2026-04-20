@@ -9,25 +9,28 @@ UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 
+# 메인 페이지
 @app.route('/')
 def index():
     return render_template('upload.html')
 
 
+# 엑셀 업로드
 @app.route('/upload', methods=['POST'])
 def upload():
     try:
-        file = request.files['file']
+        file = request.files.get('file')
 
-        if file.filename == '':
-            return "파일이 없습니다."
+        if not file or file.filename == '':
+            return "파일을 선택해주세요."
 
         filepath = os.path.join(UPLOAD_FOLDER, file.filename)
         file.save(filepath)
 
+        # 엑셀 읽기
         df = pd.read_excel(filepath)
 
-        # 컬럼 공백 제거
+        # 컬럼 공백 제거 (중요)
         df.columns = df.columns.str.strip()
 
         # 필수 컬럼 체크
@@ -39,24 +42,36 @@ def upload():
         # 정렬
         df = df.sort_values(by='랙번호')
 
-        df['실수량'] = 0
+        # 초기값 세팅
+        df['실수량'] = ''
         df['차이'] = 0
 
+        # HTML로 데이터 전달
         return render_template('inventory.html', data=df.to_dict(orient='records'))
 
     except Exception as e:
-        return f"에러 발생: {str(e)}"
+        return f"업로드 오류: {str(e)}"
 
 
-# 🔥 파일 저장 없이 바로 엑셀 다운로드
+# 🔥 엑셀 다운로드 (파일 저장 없이 메모리 처리)
 @app.route('/download', methods=['POST'])
 def download():
     try:
-        results = request.json
+        results = request.get_json()
+
+        if not results:
+            return "데이터가 없습니다."
+
         df = pd.DataFrame(results)
 
+        # 숫자 변환 (안전 처리)
+        df['실수량'] = pd.to_numeric(df['실수량'], errors='coerce').fillna(0)
+        df['전산수량'] = pd.to_numeric(df['전산수량'], errors='coerce').fillna(0)
+
+        # 차이 계산
         df['차이'] = df['실수량'] - df['전산수량']
 
+        # 메모리 엑셀 생성
         output = BytesIO()
         df.to_excel(output, index=False)
         output.seek(0)
@@ -72,5 +87,6 @@ def download():
         return f"다운로드 오류: {str(e)}"
 
 
+# 서버 실행
 if __name__ == '__main__':
     app.run()
