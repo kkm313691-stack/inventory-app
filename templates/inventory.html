@@ -29,7 +29,7 @@ input {
 
 <div id="list"></div>
 
-<button onclick="download()">엑셀 다운로드</button>
+<button onclick="downloadExcel()">엑셀 다운로드</button>
 
 <script>
 
@@ -129,20 +129,33 @@ document.addEventListener('keydown', function(e){
 });
 
 
-// 🔥 엑셀 다운로드 (서버 저장 없이 바로)
-function download(){
+// 🔥 엑셀 다운로드 (완전 안정 버전)
+function downloadExcel(){
     fetch('/download', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
         body: JSON.stringify(data)
     })
-    .then(res => res.blob())
+    .then(response => {
+        if(!response.ok){
+            throw new Error('서버 오류');
+        }
+        return response.blob();
+    })
     .then(blob => {
-        let url = window.URL.createObjectURL(blob);
-        let a = document.createElement('a');
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
         a.href = url;
         a.download = '재고조사결과.xlsx';
+        document.body.appendChild(a);
         a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+    })
+    .catch(error => {
+        alert('다운로드 실패: ' + error);
     });
 }
 
