@@ -15,17 +15,19 @@ input { font-size:20px; padding:5px; width:100%; }
 
 <h2>재고 조사</h2>
 
-<div id="list"></div>
-
+<button onclick="openNewItem()">미등록 재고 입력</button>
 <button onclick="downloadExcel()">엑셀 다운로드</button>
+
+<div id="list"></div>
 
 <script>
 
 let data = {{ data | tojson }};
+let newItems = [];
 let currentIndex = 0;
 
 
-// 🔥 안전 값 가져오기
+// 값 안전 가져오기
 function getValue(item, keys, defaultVal=''){
     for(let k of keys){
         if(item[k] !== undefined && item[k] !== null){
@@ -36,13 +38,13 @@ function getValue(item, keys, defaultVal=''){
 }
 
 
-// 🔥 화면 렌더링
+// 화면 표시
 function render(){
     let item = data[currentIndex];
 
-    let location = getValue(item, ['로케이션','랙번호','위치']);
-    let name = getValue(item, ['상품명','품명']);
-    let stock = parseInt(getValue(item, ['재고수량','전산수량'], 0)) || 0;
+    let location = getValue(item, ['로케이션']);
+    let name = getValue(item, ['상품명']);
+    let stock = parseInt(getValue(item, ['재고수량'], 0)) || 0;
     let exp = getValue(item, ['소비기한']);
 
     let html = `
@@ -79,18 +81,16 @@ function render(){
 }
 
 
-// 🔥 값 업데이트 (핵심)
+// 값 업데이트
 function updateValue(value){
     let item = data[currentIndex];
 
-    let stock = parseInt(getValue(item, ['재고수량','전산수량'], 0)) || 0;
+    let stock = parseInt(getValue(item, ['재고수량'], 0)) || 0;
 
-    // 🔥 빈값 처리
     let real = (value === '' || value === null) ? null : parseInt(value);
 
     item['실수량'] = real;
 
-    // 🔥 차이 계산
     let diff = (real === null) ? 0 : real - stock;
     item['차이'] = diff;
 
@@ -100,7 +100,7 @@ function updateValue(value){
 }
 
 
-// 🔥 차이 색상 표시
+// 차이 색상
 function updateDiffColor(){
     let item = data[currentIndex];
     let el = document.getElementById('diff');
@@ -111,12 +111,10 @@ function updateDiffColor(){
 }
 
 
-// 🔥 다음 (강제 저장 포함)
+// 다음
 function next(){
 
     let input = document.getElementById('realInput');
-
-    // 🔥 입력값 강제 반영 (중요)
     updateValue(input.value);
 
     if(data[currentIndex]['실수량'] === null){
@@ -133,7 +131,7 @@ function next(){
 }
 
 
-// 🔥 이전
+// 이전
 function prev(){
     if(currentIndex > 0){
         currentIndex--;
@@ -144,7 +142,7 @@ function prev(){
 }
 
 
-// 🔥 엔터 이동 (강제 저장 포함)
+// 엔터 이동
 document.addEventListener('keydown', function(e){
     if(e.key === 'Enter'){
         next();
@@ -152,10 +150,71 @@ document.addEventListener('keydown', function(e){
 });
 
 
-// 🔥 다운로드 (검증 포함)
+// 🔥 신규 입력 화면
+function openNewItem(){
+
+    let html = `
+    <div class="card">
+
+        <h3>미등록 재고 입력</h3>
+
+        로케이션:
+        <input type="text" id="new_location"><br><br>
+
+        상품명:
+        <input type="text" id="new_name"><br><br>
+
+        소비기한:
+        <input type="text" id="new_exp"><br><br>
+
+        실수량:
+        <input type="number" id="new_qty"><br><br>
+
+        <button onclick="saveNewItem()">저장</button>
+        <button onclick="render()">취소</button>
+
+    </div>
+    `;
+
+    document.getElementById('list').innerHTML = html;
+}
+
+
+// 🔥 신규 저장
+function saveNewItem(){
+
+    let location = document.getElementById('new_location').value.trim();
+    let name = document.getElementById('new_name').value.trim();
+    let exp = document.getElementById('new_exp').value.trim();
+    let qty = document.getElementById('new_qty').value;
+
+    if(!location || !name || qty === ''){
+        alert('필수값 입력하세요');
+        return;
+    }
+
+    let realQty = parseInt(qty);
+
+    let item = {
+        '로케이션': location,
+        '상품명': name,
+        '소비기한': exp,
+        '재고수량': 0,
+        '실수량': realQty,
+        '차이': realQty
+    };
+
+    newItems.push(item);
+
+    alert('신규 재고 추가 완료');
+
+    render();
+}
+
+
+// 🔥 다운로드
 function downloadExcel(){
 
-    // 🔥 누락 체크
     let missing = data.filter(d => d['실수량'] === null);
 
     if(missing.length > 0){
@@ -163,10 +222,12 @@ function downloadExcel(){
         return;
     }
 
+    let finalData = [...data, ...newItems];
+
     fetch('/download', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body: JSON.stringify(data)
+        body: JSON.stringify(finalData)
     })
     .then(res => {
         if(!res.ok){
@@ -187,7 +248,7 @@ function downloadExcel(){
 }
 
 
-// 🔥 시작
+// 시작
 render();
 
 </script>
