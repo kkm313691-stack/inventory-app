@@ -58,12 +58,11 @@ def upload():
         file.save(filepath)
 
         df = pd.read_excel(filepath)
-
         df = map_columns(df)
 
         df = df.sort_values(by='로케이션')
 
-        # 🔥 초기값 설정 (None으로 해야 검증 가능)
+        # 🔥 초기값
         df['실수량'] = None
         df['차이'] = 0
 
@@ -78,13 +77,9 @@ def download():
     try:
         results = request.get_json()
 
-        # 🔥 디버깅 로그
-        print("===== 받은 데이터 =====")
-        print(results)
-
         df = pd.DataFrame(results)
 
-        # 🔥 컬럼 존재 체크
+        # 🔥 필수 컬럼 체크
         required_cols = ['상품명', '로케이션', '소비기한', '재고수량', '실수량']
         for col in required_cols:
             if col not in df.columns:
@@ -94,14 +89,15 @@ def download():
         df['실수량'] = pd.to_numeric(df['실수량'], errors='coerce')
         df['재고수량'] = pd.to_numeric(df['재고수량'], errors='coerce')
 
-        # 🔥 입력 누락 체크
+        # 🔥 누락 체크
         if df['실수량'].isnull().any():
-            missing_rows = df[df['실수량'].isnull()]
-            print("누락 행:", missing_rows)
             return "실수량 입력 안된 항목이 있습니다."
 
         # 🔥 차이 계산
         df['차이'] = df['실수량'] - df['재고수량']
+
+        # 🔥 정렬 (신규 포함)
+        df = df.sort_values(by=['로케이션', '상품명'])
 
         # 🔥 엑셀 생성
         output = BytesIO()
