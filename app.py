@@ -9,13 +9,12 @@ UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 
-# 🔥 숫자 정제 함수 (서버)
+# 🔥 숫자 정제
 def clean_number_series(series):
     return (
         series.astype(str)
         .str.replace(r'[^0-9.-]', '', regex=True)
-        .replace('', '0')
-        .astype(float)
+        .replace('', None)
     )
 
 
@@ -69,8 +68,9 @@ def upload():
         df = pd.read_excel(filepath)
         df = map_columns(df)
 
-        # 🔥 재고수량 정제 (핵심)
+        # 🔥 재고수량 정제
         df['재고수량'] = clean_number_series(df['재고수량'])
+        df['재고수량'] = pd.to_numeric(df['재고수량'], errors='coerce').fillna(0)
 
         df = df.sort_values(by='로케이션')
 
@@ -94,17 +94,20 @@ def download():
             if col not in df.columns:
                 return f"컬럼 누락: {col}"
 
-        # 🔥 숫자 정제 (핵심)
+        # 🔥 숫자 정제
         df['재고수량'] = clean_number_series(df['재고수량'])
+        df['재고수량'] = pd.to_numeric(df['재고수량'], errors='coerce').fillna(0)
+
         df['실수량'] = clean_number_series(df['실수량'])
+        df['실수량'] = pd.to_numeric(df['실수량'], errors='coerce')  # 🔥 NaN 허용
 
-        if df['실수량'].isnull().any():
-            return "실수량 입력 안된 항목이 있습니다."
+        # 🔥 차이 계산 (미입력은 0 기준)
+        df['차이'] = df['실수량'].fillna(0) - df['재고수량']
 
-        df['차이'] = df['실수량'] - df['재고수량']
-
+        # 🔥 정렬
         df = df.sort_values(by=['로케이션', '상품명'])
 
+        # 🔥 엑셀 생성
         output = BytesIO()
         df.to_excel(output, index=False)
         output.seek(0)
