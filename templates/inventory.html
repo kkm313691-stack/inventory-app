@@ -25,7 +25,7 @@ let data = {{ data | tojson }};
 let currentIndex = 0;
 
 
-// 🔥 안전하게 값 가져오는 함수 (핵심)
+// 🔥 안전 값 가져오기
 function getValue(item, keys, defaultVal=''){
     for(let k of keys){
         if(item[k] !== undefined && item[k] !== null){
@@ -36,13 +36,13 @@ function getValue(item, keys, defaultVal=''){
 }
 
 
-// 화면 표시
+// 🔥 화면 렌더링
 function render(){
     let item = data[currentIndex];
 
     let location = getValue(item, ['로케이션','랙번호','위치']);
     let name = getValue(item, ['상품명','품명']);
-    let stock = getValue(item, ['재고수량','전산수량'], 0);
+    let stock = parseInt(getValue(item, ['재고수량','전산수량'], 0)) || 0;
     let exp = getValue(item, ['소비기한']);
 
     let html = `
@@ -57,10 +57,10 @@ function render(){
 
         실수량:
         <input type="number" id="realInput" 
-            value="${item['실수량'] || ''}"
-            onchange="updateValue(this.value)">
+            value="${item['실수량'] ?? ''}"
+            oninput="updateValue(this.value)">
         
-        <div id="diff">차이: ${item['차이'] || 0}</div>
+        <div id="diff">차이: ${item['차이'] ?? 0}</div>
 
         <br>
         <button onclick="prev()">이전</button>
@@ -71,36 +71,55 @@ function render(){
 
     document.getElementById('list').innerHTML = html;
 
+    updateDiffColor();
+
     setTimeout(() => {
         document.getElementById('realInput').focus();
     }, 100);
 }
 
 
-// 값 입력
+// 🔥 값 업데이트 (핵심)
 function updateValue(value){
     let item = data[currentIndex];
 
-    let stock = parseInt(
-        getValue(item, ['재고수량','전산수량'], 0)
-    );
+    let stock = parseInt(getValue(item, ['재고수량','전산수량'], 0)) || 0;
 
-    let real = parseInt(value || 0);
-    let diff = real - stock;
+    // 🔥 빈값 처리
+    let real = (value === '' || value === null) ? null : parseInt(value);
 
     item['실수량'] = real;
+
+    // 🔥 차이 계산
+    let diff = (real === null) ? 0 : real - stock;
     item['차이'] = diff;
 
-    let el = document.getElementById('diff');
-    el.innerText = '차이: ' + diff;
+    document.getElementById('diff').innerText = '차이: ' + diff;
 
-    el.style.color = diff !== 0 ? 'red' : 'black';
+    updateDiffColor();
 }
 
 
-// 다음
+// 🔥 차이 색상 표시
+function updateDiffColor(){
+    let item = data[currentIndex];
+    let el = document.getElementById('diff');
+
+    if(!el) return;
+
+    el.style.color = (item['차이'] !== 0) ? 'red' : 'black';
+}
+
+
+// 🔥 다음 (강제 저장 포함)
 function next(){
-    if(data[currentIndex]['실수량'] === '' || data[currentIndex]['실수량'] === null){
+
+    let input = document.getElementById('realInput');
+
+    // 🔥 입력값 강제 반영 (중요)
+    updateValue(input.value);
+
+    if(data[currentIndex]['실수량'] === null){
         alert('실수량 입력하세요');
         return;
     }
@@ -114,7 +133,7 @@ function next(){
 }
 
 
-// 이전
+// 🔥 이전
 function prev(){
     if(currentIndex > 0){
         currentIndex--;
@@ -125,7 +144,7 @@ function prev(){
 }
 
 
-// 엔터 이동
+// 🔥 엔터 이동 (강제 저장 포함)
 document.addEventListener('keydown', function(e){
     if(e.key === 'Enter'){
         next();
@@ -133,25 +152,42 @@ document.addEventListener('keydown', function(e){
 });
 
 
-// 다운로드
+// 🔥 다운로드 (검증 포함)
 function downloadExcel(){
+
+    // 🔥 누락 체크
+    let missing = data.filter(d => d['실수량'] === null);
+
+    if(missing.length > 0){
+        alert('실수량 입력 안된 항목이 있습니다');
+        return;
+    }
+
     fetch('/download', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body: JSON.stringify(data)
     })
-    .then(res => res.blob())
+    .then(res => {
+        if(!res.ok){
+            return res.text().then(text => { throw new Error(text); });
+        }
+        return res.blob();
+    })
     .then(blob => {
         let url = window.URL.createObjectURL(blob);
         let a = document.createElement('a');
         a.href = url;
         a.download = '재고조사결과.xlsx';
         a.click();
+    })
+    .catch(err => {
+        alert('오류: ' + err.message);
     });
 }
 
 
-// 시작
+// 🔥 시작
 render();
 
 </script>
