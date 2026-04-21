@@ -9,7 +9,17 @@ UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 
-# 🔥 컬럼 자동 매핑
+# 🔥 숫자 정제 함수 (서버)
+def clean_number_series(series):
+    return (
+        series.astype(str)
+        .str.replace(r'[^0-9.-]', '', regex=True)
+        .replace('', '0')
+        .astype(float)
+    )
+
+
+# 🔥 컬럼 매핑
 def map_columns(df):
     df.columns = df.columns.str.strip()
 
@@ -33,7 +43,6 @@ def map_columns(df):
     df = df.rename(columns=col_map)
 
     required = ['상품명', '로케이션', '소비기한', '재고수량']
-
     for r in required:
         if r not in df.columns:
             raise Exception(f"필수 컬럼 없음: {r}")
@@ -60,9 +69,11 @@ def upload():
         df = pd.read_excel(filepath)
         df = map_columns(df)
 
+        # 🔥 재고수량 정제 (핵심)
+        df['재고수량'] = clean_number_series(df['재고수량'])
+
         df = df.sort_values(by='로케이션')
 
-        # 🔥 초기값
         df['실수량'] = None
         df['차이'] = 0
 
@@ -76,30 +87,24 @@ def upload():
 def download():
     try:
         results = request.get_json()
-
         df = pd.DataFrame(results)
 
-        # 🔥 필수 컬럼 체크
         required_cols = ['상품명', '로케이션', '소비기한', '재고수량', '실수량']
         for col in required_cols:
             if col not in df.columns:
                 return f"컬럼 누락: {col}"
 
-        # 🔥 숫자 변환
-        df['실수량'] = pd.to_numeric(df['실수량'], errors='coerce')
-        df['재고수량'] = pd.to_numeric(df['재고수량'], errors='coerce')
+        # 🔥 숫자 정제 (핵심)
+        df['재고수량'] = clean_number_series(df['재고수량'])
+        df['실수량'] = clean_number_series(df['실수량'])
 
-        # 🔥 누락 체크
         if df['실수량'].isnull().any():
             return "실수량 입력 안된 항목이 있습니다."
 
-        # 🔥 차이 계산
         df['차이'] = df['실수량'] - df['재고수량']
 
-        # 🔥 정렬 (신규 포함)
         df = df.sort_values(by=['로케이션', '상품명'])
 
-        # 🔥 엑셀 생성
         output = BytesIO()
         df.to_excel(output, index=False)
         output.seek(0)
