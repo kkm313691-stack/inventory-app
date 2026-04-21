@@ -27,7 +27,17 @@ let newItems = [];
 let currentIndex = 0;
 
 
-// 값 안전 가져오기
+// 🔥 숫자 정제 함수 (프론트 핵심)
+function cleanNumber(val){
+    if(val === null || val === undefined) return 0;
+
+    return parseInt(
+        String(val).replace(/[^0-9.-]/g, '')
+    ) || 0;
+}
+
+
+// 값 가져오기
 function getValue(item, keys, defaultVal=''){
     for(let k of keys){
         if(item[k] !== undefined && item[k] !== null){
@@ -38,13 +48,13 @@ function getValue(item, keys, defaultVal=''){
 }
 
 
-// 화면 표시
+// 화면
 function render(){
     let item = data[currentIndex];
 
     let location = getValue(item, ['로케이션']);
     let name = getValue(item, ['상품명']);
-    let stock = parseInt(getValue(item, ['재고수량'], 0)) || 0;
+    let stock = cleanNumber(getValue(item, ['재고수량'], 0));
     let exp = getValue(item, ['소비기한']);
 
     let html = `
@@ -85,8 +95,7 @@ function render(){
 function updateValue(value){
     let item = data[currentIndex];
 
-    let stock = parseInt(getValue(item, ['재고수량'], 0)) || 0;
-
+    let stock = cleanNumber(getValue(item, ['재고수량'], 0));
     let real = (value === '' || value === null) ? null : parseInt(value);
 
     item['실수량'] = real;
@@ -100,7 +109,7 @@ function updateValue(value){
 }
 
 
-// 차이 색상
+// 색상
 function updateDiffColor(){
     let item = data[currentIndex];
     let el = document.getElementById('diff');
@@ -113,7 +122,6 @@ function updateDiffColor(){
 
 // 다음
 function next(){
-
     let input = document.getElementById('realInput');
     updateValue(input.value);
 
@@ -150,9 +158,8 @@ document.addEventListener('keydown', function(e){
 });
 
 
-// 🔥 신규 입력 화면
+// 🔥 신규 입력
 function openNewItem(){
-
     let html = `
     <div class="card">
 
@@ -175,14 +182,12 @@ function openNewItem(){
 
     </div>
     `;
-
     document.getElementById('list').innerHTML = html;
 }
 
 
-// 🔥 신규 저장
+// 저장
 function saveNewItem(){
-
     let location = document.getElementById('new_location').value.trim();
     let name = document.getElementById('new_name').value.trim();
     let exp = document.getElementById('new_exp').value.trim();
@@ -212,7 +217,7 @@ function saveNewItem(){
 }
 
 
-// 🔥 다운로드
+// 다운로드
 function downloadExcel(){
 
     let missing = data.filter(d => d['실수량'] === null);
