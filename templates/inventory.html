@@ -27,7 +27,7 @@ let newItems = [];
 let currentIndex = 0;
 
 
-// 🔥 숫자 정제 함수 (프론트 핵심)
+// 🔥 숫자 정제
 function cleanNumber(val){
     if(val === null || val === undefined) return 0;
 
@@ -125,11 +125,6 @@ function next(){
     let input = document.getElementById('realInput');
     updateValue(input.value);
 
-    if(data[currentIndex]['실수량'] === null){
-        alert('실수량 입력하세요');
-        return;
-    }
-
     if(currentIndex < data.length - 1){
         currentIndex++;
         render();
@@ -217,15 +212,8 @@ function saveNewItem(){
 }
 
 
-// 다운로드
+// 🔥 다운로드 (중간 저장 가능)
 function downloadExcel(){
-
-    let missing = data.filter(d => d['실수량'] === null);
-
-    if(missing.length > 0){
-        alert('실수량 입력 안된 항목이 있습니다');
-        return;
-    }
 
     let finalData = [...data, ...newItems];
 
@@ -234,12 +222,7 @@ function downloadExcel(){
         headers:{'Content-Type':'application/json'},
         body: JSON.stringify(finalData)
     })
-    .then(res => {
-        if(!res.ok){
-            return res.text().then(text => { throw new Error(text); });
-        }
-        return res.blob();
-    })
+    .then(res => res.blob())
     .then(blob => {
         let url = window.URL.createObjectURL(blob);
         let a = document.createElement('a');
