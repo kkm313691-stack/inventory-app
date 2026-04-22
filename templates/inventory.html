@@ -26,6 +26,7 @@ input { font-size:20px; padding:5px; width:100%; }
 let data = {{ data | tojson }};
 let newItems = [];
 let currentIndex = 0;
+let isProcessing = false;
 
 
 // 숫자 정제
@@ -108,10 +109,13 @@ function updateValue(value){
 }
 
 
-// 동일 버튼 (🔥 핵심 기능)
+// 동일 처리
 function setSame(){
-    let item = data[currentIndex];
 
+    if(isProcessing) return;
+    isProcessing = true;
+
+    let item = data[currentIndex];
     let stock = cleanNumber(getValue(item, ['재고수량'], 0));
 
     item['실수량'] = stock;
@@ -122,8 +126,10 @@ function setSame(){
 
     updateDiffColor();
 
-    // 자동 다음 이동 (속도 개선)
-    setTimeout(() => next(), 100);
+    setTimeout(() => {
+        next();
+        isProcessing = false;
+    }, 100);
 }
 
 
@@ -163,14 +169,19 @@ function prev(){
 }
 
 
-// 단축키
+// 🔥 단축키 (방법2 적용)
 document.addEventListener('keydown', function(e){
+
     if(e.key === 'Enter'){
         next();
     }
-    if(e.key === '0'){
+
+    // 👉 '+' 키로 동일 처리 (숫자 입력과 충돌 없음)
+    if(e.key === '+'){
+        e.preventDefault();
         setSame();
     }
+
 });
 
 
