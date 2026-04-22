@@ -28,13 +28,10 @@ let newItems = [];
 let currentIndex = 0;
 
 
-// 🔥 숫자 정제 (핵심)
+// 숫자 정제
 function cleanNumber(val){
     if(val === null || val === undefined) return 0;
-
-    return parseInt(
-        String(val).replace(/[^0-9.-]/g, '')
-    ) || 0;
+    return parseInt(String(val).replace(/[^0-9.-]/g, '')) || 0;
 }
 
 
@@ -78,6 +75,7 @@ function render(){
         <br>
         <button onclick="prev()">이전</button>
         <button onclick="next()">다음</button>
+        <button onclick="setSame()">동일</button>
 
     </div>
     `;
@@ -107,6 +105,25 @@ function updateValue(value){
     document.getElementById('diff').innerText = '차이: ' + diff;
 
     updateDiffColor();
+}
+
+
+// 동일 버튼 (🔥 핵심 기능)
+function setSame(){
+    let item = data[currentIndex];
+
+    let stock = cleanNumber(getValue(item, ['재고수량'], 0));
+
+    item['실수량'] = stock;
+    item['차이'] = 0;
+
+    document.getElementById('realInput').value = stock;
+    document.getElementById('diff').innerText = '차이: 0';
+
+    updateDiffColor();
+
+    // 자동 다음 이동 (속도 개선)
+    setTimeout(() => next(), 100);
 }
 
 
@@ -146,15 +163,18 @@ function prev(){
 }
 
 
-// 엔터 이동
+// 단축키
 document.addEventListener('keydown', function(e){
     if(e.key === 'Enter'){
         next();
     }
+    if(e.key === '0'){
+        setSame();
+    }
 });
 
 
-// 🔥 신규 재고 입력 화면
+// 신규 재고 입력
 function openNewItem(){
     let html = `
     <div class="card">
@@ -182,7 +202,7 @@ function openNewItem(){
 }
 
 
-// 🔥 신규 저장
+// 신규 저장
 function saveNewItem(){
     let location = document.getElementById('new_location').value.trim();
     let name = document.getElementById('new_name').value.trim();
@@ -213,7 +233,7 @@ function saveNewItem(){
 }
 
 
-// 🔥 엑셀 다운로드 (중간 저장 가능)
+// 엑셀 다운로드
 function downloadExcel(){
 
     let finalData = [...data, ...newItems];
@@ -230,14 +250,11 @@ function downloadExcel(){
         a.href = url;
         a.download = '재고조사결과.xlsx';
         a.click();
-    })
-    .catch(err => {
-        alert('오류: ' + err.message);
     });
 }
 
 
-// 🔥 링크 공유 (핵심 기능)
+// 공유 링크
 function shareLink(){
 
     let finalData = [...data, ...newItems];
@@ -250,21 +267,10 @@ function shareLink(){
     .then(res => res.json())
     .then(res => {
 
-        if(res.error){
-            alert(res.error);
-            return;
-        }
-
         let fullUrl = window.location.origin + res.link;
-
-        // 클립보드 복사
         navigator.clipboard.writeText(fullUrl);
 
-        alert("링크 생성 완료\n복사되었습니다:\n" + fullUrl);
-
-    })
-    .catch(err => {
-        alert('오류: ' + err.message);
+        alert("링크 복사 완료\n" + fullUrl);
     });
 }
 
