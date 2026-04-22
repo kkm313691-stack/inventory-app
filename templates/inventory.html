@@ -17,6 +17,7 @@ input { font-size:20px; padding:5px; width:100%; }
 
 <button onclick="openNewItem()">미등록 재고 입력</button>
 <button onclick="downloadExcel()">엑셀 다운로드</button>
+<button onclick="shareLink()">공유하기</button>
 
 <div id="list"></div>
 
@@ -27,7 +28,7 @@ let newItems = [];
 let currentIndex = 0;
 
 
-// 🔥 숫자 정제
+// 🔥 숫자 정제 (핵심)
 function cleanNumber(val){
     if(val === null || val === undefined) return 0;
 
@@ -48,7 +49,7 @@ function getValue(item, keys, defaultVal=''){
 }
 
 
-// 화면
+// 화면 렌더링
 function render(){
     let item = data[currentIndex];
 
@@ -109,7 +110,7 @@ function updateValue(value){
 }
 
 
-// 색상
+// 차이 색상
 function updateDiffColor(){
     let item = data[currentIndex];
     let el = document.getElementById('diff');
@@ -153,7 +154,7 @@ document.addEventListener('keydown', function(e){
 });
 
 
-// 🔥 신규 입력
+// 🔥 신규 재고 입력 화면
 function openNewItem(){
     let html = `
     <div class="card">
@@ -181,7 +182,7 @@ function openNewItem(){
 }
 
 
-// 저장
+// 🔥 신규 저장
 function saveNewItem(){
     let location = document.getElementById('new_location').value.trim();
     let name = document.getElementById('new_name').value.trim();
@@ -212,7 +213,7 @@ function saveNewItem(){
 }
 
 
-// 🔥 다운로드 (중간 저장 가능)
+// 🔥 엑셀 다운로드 (중간 저장 가능)
 function downloadExcel(){
 
     let finalData = [...data, ...newItems];
@@ -229,6 +230,38 @@ function downloadExcel(){
         a.href = url;
         a.download = '재고조사결과.xlsx';
         a.click();
+    })
+    .catch(err => {
+        alert('오류: ' + err.message);
+    });
+}
+
+
+// 🔥 링크 공유 (핵심 기능)
+function shareLink(){
+
+    let finalData = [...data, ...newItems];
+
+    fetch('/generate_link', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(finalData)
+    })
+    .then(res => res.json())
+    .then(res => {
+
+        if(res.error){
+            alert(res.error);
+            return;
+        }
+
+        let fullUrl = window.location.origin + res.link;
+
+        // 클립보드 복사
+        navigator.clipboard.writeText(fullUrl);
+
+        alert("링크 생성 완료\n복사되었습니다:\n" + fullUrl);
+
     })
     .catch(err => {
         alert('오류: ' + err.message);
