@@ -8,6 +8,7 @@ body { font-size:20px; }
 .card { border:1px solid #ddd; padding:20px; margin:10px; }
 button { font-size:20px; padding:10px; margin:5px; }
 input { font-size:20px; padding:5px; width:100%; }
+.suggestion-item:hover { background:#f0f0f0; }
 </style>
 </head>
 
@@ -27,6 +28,9 @@ let data = {{ data | tojson }};
 let newItems = [];
 let currentIndex = 0;
 let isProcessing = false;
+
+// 🔥 상품명 리스트 (자동완성용)
+let productList = [...new Set(data.map(item => item['상품명']).filter(v => v))];
 
 
 // 숫자 정제
@@ -169,14 +173,13 @@ function prev(){
 }
 
 
-// 🔥 단축키 (방법2 적용)
+// 단축키 (+ 동일 처리)
 document.addEventListener('keydown', function(e){
 
     if(e.key === 'Enter'){
         next();
     }
 
-    // 👉 '+' 키로 동일 처리 (숫자 입력과 충돌 없음)
     if(e.key === '+'){
         e.preventDefault();
         setSame();
@@ -185,7 +188,7 @@ document.addEventListener('keydown', function(e){
 });
 
 
-// 신규 재고 입력
+// 🔥 신규 재고 입력 (자동완성 포함)
 function openNewItem(){
     let html = `
     <div class="card">
@@ -196,7 +199,8 @@ function openNewItem(){
         <input type="text" id="new_location"><br><br>
 
         상품명:
-        <input type="text" id="new_name"><br><br>
+        <input type="text" id="new_name" oninput="showSuggestions(this.value)">
+        <div id="suggestions" style="border:1px solid #ccc;"></div><br><br>
 
         소비기한:
         <input type="text" id="new_exp"><br><br>
@@ -210,6 +214,38 @@ function openNewItem(){
     </div>
     `;
     document.getElementById('list').innerHTML = html;
+}
+
+
+// 자동완성
+function showSuggestions(value){
+
+    let box = document.getElementById('suggestions');
+
+    if(!value){
+        box.innerHTML = '';
+        return;
+    }
+
+    let filtered = productList.filter(name => 
+        name.toLowerCase().includes(value.toLowerCase())
+    ).slice(0, 5);
+
+    let html = filtered.map(name => `
+        <div class="suggestion-item" style="padding:5px; border-bottom:1px solid #eee; cursor:pointer;"
+            onclick="selectProduct('${name}')">
+            ${name}
+        </div>
+    `).join('');
+
+    box.innerHTML = html;
+}
+
+
+// 선택
+function selectProduct(name){
+    document.getElementById('new_name').value = name;
+    document.getElementById('suggestions').innerHTML = '';
 }
 
 
@@ -237,6 +273,10 @@ function saveNewItem(){
     };
 
     newItems.push(item);
+
+    // 🔥 자동완성 리스트 업데이트
+    productList.push(name);
+    productList = [...new Set(productList)];
 
     alert('신규 재고 추가 완료');
 
