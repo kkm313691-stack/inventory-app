@@ -1,7 +1,8 @@
-from flask import Flask, render_template, request, send_file
+from flask import Flask, render_template, request, send_file, jsonify
 import pandas as pd
 import os
 from io import BytesIO
+from datetime import datetime
 
 app = Flask(__name__)
 
@@ -68,7 +69,6 @@ def upload():
         df = pd.read_excel(filepath)
         df = map_columns(df)
 
-        # 🔥 재고수량 정제
         df['재고수량'] = clean_number_series(df['재고수량'])
         df['재고수량'] = pd.to_numeric(df['재고수량'], errors='coerce').fillna(0)
 
@@ -83,31 +83,21 @@ def upload():
         return f"업로드 오류: {str(e)}"
 
 
+# 🔥 다운로드
 @app.route('/download', methods=['POST'])
 def download():
     try:
         results = request.get_json()
         df = pd.DataFrame(results)
 
-        required_cols = ['상품명', '로케이션', '소비기한', '재고수량', '실수량']
-        for col in required_cols:
-            if col not in df.columns:
-                return f"컬럼 누락: {col}"
-
-        # 🔥 숫자 정제
         df['재고수량'] = clean_number_series(df['재고수량'])
         df['재고수량'] = pd.to_numeric(df['재고수량'], errors='coerce').fillna(0)
 
         df['실수량'] = clean_number_series(df['실수량'])
-        df['실수량'] = pd.to_numeric(df['실수량'], errors='coerce')  # 🔥 NaN 허용
+        df['실수량'] = pd.to_numeric(df['실수량'], errors='coerce')
 
-        # 🔥 차이 계산 (미입력은 0 기준)
         df['차이'] = df['실수량'].fillna(0) - df['재고수량']
 
-        # 🔥 정렬
-        df = df.sort_values(by=['로케이션', '상품명'])
-
-        # 🔥 엑셀 생성
         output = BytesIO()
         df.to_excel(output, index=False)
         output.seek(0)
@@ -121,6 +111,40 @@ def download():
 
     except Exception as e:
         return f"다운로드 오류: {str(e)}"
+
+
+# 🔥 링크 생성 (핵심)
+@app.route('/generate_link', methods=['POST'])
+def generate_link():
+    try:
+        results = request.get_json()
+        df = pd.DataFrame(results)
+
+        df['재고수량'] = clean_number_series(df['재고수량'])
+        df['재고수량'] = pd.to_numeric(df['재고수량'], errors='coerce').fillna(0)
+
+        df['실수량'] = clean_number_series(df['실수량'])
+        df['실수량'] = pd.to_numeric(df['실수량'], errors='coerce')
+
+        df['차이'] = df['실수량'].fillna(0) - df['재고수량']
+
+        filename = f"result_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
+
+        df.to_excel(filepath, index=False)
+
+        link = f"/file/{filename}"
+
+        return jsonify({"link": link})
+
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
+
+# 🔥 파일 다운로드 링크
+@app.route('/file/<filename>')
+def file_download(filename):
+    return send_file(os.path.join(UPLOAD_FOLDER, filename), as_attachment=True)
 
 
 if __name__ == '__main__':
