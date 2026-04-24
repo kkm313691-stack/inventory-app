@@ -7,88 +7,170 @@
 body {
     font-size:18px;
     margin:0;
-    padding:20px;
+    padding:10px;
     background:#f5f5f5;
-    text-align:center;
 }
 
-h2 {
-    margin-bottom:30px;
-}
+h2 { text-align:center; }
 
-/* 🔥 업로드 박스 */
-.upload-box {
-    background:#fff;
-    border:2px dashed #ccc;
-    padding:30px;
-    border-radius:12px;
-}
-
-/* 🔥 파일 버튼 숨기기 */
-input[type="file"] {
-    display:none;
-}
-
-/* 🔥 커스텀 버튼 */
-.file-label {
-    display:block;
-    background:#4CAF50;
-    color:white;
-    padding:20px;
-    font-size:20px;
-    border-radius:10px;
-    margin-bottom:20px;
-}
-
-/* 🔥 업로드 버튼 */
 button {
+    font-size:18px;
+    padding:12px;
+    margin:5px 0;
     width:100%;
-    padding:18px;
-    font-size:20px;
-    background:#2196F3;
-    color:white;
-    border:none;
+}
+
+.card {
+    border:1px solid #ddd;
+    padding:20px;
+    margin:10px 0;
+    background:#fff;
     border-radius:10px;
 }
 
-/* 🔥 파일명 표시 */
-#filename {
-    margin-top:10px;
-    font-size:16px;
-    color:#333;
-}
+.done { background:#e8f5e9; }
 
+.diff-red { color:red; font-weight:bold; }
+
+input {
+    width:100%;
+    font-size:22px;
+    padding:12px;
+    margin-top:8px;
+    margin-bottom:10px;
+}
 </style>
 </head>
 
 <body>
 
-<h2>재고조사 파일 업로드</h2>
+<h2>재고조사</h2>
 
-<form action="/upload" method="post" enctype="multipart/form-data">
+<button onclick="downloadExcel()">다운로드</button>
+<button onclick="shareLink()">공유</button>
 
-    <div class="upload-box">
-
-        <label for="file" class="file-label">
-            📁 엑셀 파일 선택
-        </label>
-
-        <input type="file" name="file" id="file" onchange="showName()">
-
-        <div id="filename"></div>
-
-        <button type="submit">업로드 시작</button>
-
-    </div>
-
-</form>
+<div id="list"></div>
 
 <script>
-function showName(){
-    let file = document.getElementById('file').files[0];
-    document.getElementById('filename').innerText = file ? file.name : '';
-}
-</script>
 
+let data = {{ data | tojson }};
+let currentIndex = data.findIndex(x => x['실수량'] == null);
+if(currentIndex < 0) currentIndex = 0;
+
+
+// 🔥 렌더
+function render(){
+
+    let item = data[currentIndex];
+
+    let diffClass = item['차이'] != 0 ? 'diff-red' : '';
+
+    document.getElementById('list').innerHTML = `
+    <div class="card ${item['실수량']!=null?'done':''}">
+        ${currentIndex+1} / ${data.length}<br><br>
+
+        📍 ${item['로케이션']||''}<br>
+        📦 ${item['상품명']}<br><br>
+
+        재고수량: ${item['재고수량']}<br><br>
+
+        <div>
+        실수량 입력:
+        <input id="qty"
+            value="${item['실수량'] ?? ''}"
+            inputmode="numeric"
+            placeholder="수량 입력"
+            oninput="update(this.value)">
+        </div>
+
+        <div class="${diffClass}">
+        차이: ${item['차이']}
+        </div>
+
+        <br>
+
+        <button onclick="prev()">⬅ 이전</button>
+        <button onclick="same()">✔ 동일</button>
+        <button onclick="next()">다음 ➡</button>
+    </div>
+    `;
+}
+
+
+// 🔥 핵심 수정 (실시간 반영)
+function update(v){
+
+    let item = data[currentIndex];
+
+    let real = (v === '') ? null : parseInt(v);
+
+    item['실수량'] = isNaN(real) ? null : real;
+    item['차이'] = item['실수량'] == null ? 0 : item['실수량'] - item['재고수량'];
+
+    render(); // 👉 이거 없어서 안됐던 것
+}
+
+
+// 동일 처리
+function same(){
+    let item = data[currentIndex];
+    item['실수량'] = item['재고수량'];
+    item['차이'] = 0;
+    next();
+}
+
+
+// 이동
+function next(){
+    if(currentIndex < data.length-1){
+        currentIndex++;
+        render();
+    }
+}
+
+function prev(){
+    if(currentIndex > 0){
+        currentIndex--;
+        render();
+    }
+}
+
+
+// 다운로드
+function downloadExcel(){
+    fetch('/download',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(data)
+    })
+    .then(r=>r.blob())
+    .then(b=>{
+        let a=document.createElement('a');
+        a.href=URL.createObjectURL(b);
+        a.download='result.xlsx';
+        a.click();
+    });
+}
+
+
+// 링크 공유
+function shareLink(){
+    fetch('/generate_link',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(data)
+    })
+    .then(r=>r.json())
+    .then(r=>{
+        let url=location.origin+r.link;
+        navigator.clipboard.writeText(url);
+        alert("링크 복사됨:\n"+url);
+    });
+}
+
+
+render();
+
+</script>
 </body>
 </html>
