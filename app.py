@@ -11,7 +11,6 @@ UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 
-# 🔥 숫자 정제
 def clean_number_series(series):
     return (
         series.astype(str)
@@ -20,24 +19,16 @@ def clean_number_series(series):
     )
 
 
-# 🔥 날짜 정제
 def clean_date_series(series):
-    return pd.to_datetime(series, errors='coerce') \
-             .dt.strftime('%Y-%m-%d')
+    return pd.to_datetime(series, errors='coerce').dt.strftime('%Y-%m-%d')
 
 
-# 🔥 자연 정렬 (핵심)
 def natural_sort_key(s):
     if pd.isna(s):
         return []
-
-    return [
-        int(text) if text.isdigit() else text
-        for text in re.split(r'(\d+)', str(s))
-    ]
+    return [int(text) if text.isdigit() else text for text in re.split(r'(\d+)', str(s))]
 
 
-# 🔥 컬럼 매핑
 def map_columns(df):
     df.columns = df.columns.str.strip()
 
@@ -48,34 +39,25 @@ def map_columns(df):
 
         if '상품' in c or '품명' in c:
             col_map[col] = '상품명'
-
         elif '코드' in c or '바코드' in c:
             col_map[col] = '상품코드'
-
         elif '로케이션' in c or '랙' in c or '위치' in c:
             col_map[col] = '로케이션'
-
         elif '소비' in c or '유통' in c:
             col_map[col] = '소비기한'
-
         elif '재고수량' in c:
             col_map[col] = '재고수량'
-
         elif '실수량' in c:
             col_map[col] = '실수량'
-
         elif '차이' in c:
             col_map[col] = '차이'
-
         elif '입수' in c:
             col_map[col] = '입수'
 
     df = df.rename(columns=col_map)
 
-    required = ['상품명']
-    for r in required:
-        if r not in df.columns:
-            raise Exception(f"필수 컬럼 없음: {r}")
+    if '상품명' not in df.columns:
+        raise Exception("필수 컬럼 없음: 상품명")
 
     return df
 
@@ -85,14 +67,13 @@ def index():
     return render_template('upload.html')
 
 
-# 🔥 업로드 (자연 정렬 적용)
 @app.route('/upload', methods=['POST'])
 def upload():
     try:
         file = request.files.get('file')
 
-        if not file or file.filename == '':
-            return "파일을 선택해주세요."
+        if not file:
+            return "파일 없음"
 
         filepath = os.path.join(UPLOAD_FOLDER, file.filename)
         file.save(filepath)
@@ -100,90 +81,63 @@ def upload():
         df = pd.read_excel(filepath)
         df = map_columns(df)
 
-        # 상품코드 없으면 생성
         if '상품코드' not in df.columns:
             df['상품코드'] = df['상품명']
 
-        # 재고수량 정리
         if '재고수량' in df.columns:
-            df['재고수량'] = clean_number_series(df['재고수량'])
-            df['재고수량'] = pd.to_numeric(df['재고수량'], errors='coerce').fillna(0)
+            df['재고수량'] = pd.to_numeric(clean_number_series(df['재고수량']), errors='coerce').fillna(0)
         else:
             df['재고수량'] = 0
 
-        # 날짜 정리
         if '소비기한' in df.columns:
             df['소비기한'] = clean_date_series(df['소비기한'])
         else:
             df['소비기한'] = ''
 
-        # 실수량 유지 (이어하기)
         if '실수량' in df.columns:
-            df['실수량'] = clean_number_series(df['실수량'])
-            df['실수량'] = pd.to_numeric(df['실수량'], errors='coerce')
+            df['실수량'] = pd.to_numeric(clean_number_series(df['실수량']), errors='coerce')
         else:
             df['실수량'] = None
 
-        # 차이 계산
         df['차이'] = df['실수량'].fillna(0) - df['재고수량']
 
-        # 🔥 자연 정렬 적용
         if '로케이션' in df.columns:
-            df = df.sort_values(
-                by='로케이션',
-                key=lambda col: col.map(natural_sort_key)
-            )
+            df = df.sort_values(by='로케이션', key=lambda col: col.map(natural_sort_key))
 
         return render_template(
             'inventory.html',
-            data=df.to_dict(orient='records')
+            data=df.to_dict(orient='records'),
+            mode='location'
         )
 
     except Exception as e:
-        return f"업로드 오류: {str(e)}"
+        return f"오류: {str(e)}"
 
 
-# 🔥 다운로드
 @app.route('/download', methods=['POST'])
 def download():
-    try:
-        df = pd.DataFrame(request.get_json())
+    df = pd.DataFrame(request.get_json())
+    df['차이'] = df['실수량'].fillna(0) - df['재고수량']
 
-        df['차이'] = df['실수량'].fillna(0) - df['재고수량']
+    output = BytesIO()
+    df.to_excel(output, index=False)
+    output.seek(0)
 
-        output = BytesIO()
-        df.to_excel(output, index=False)
-        output.seek(0)
-
-        return send_file(
-            output,
-            as_attachment=True,
-            download_name="재고조사결과.xlsx",
-            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        )
-
-    except Exception as e:
-        return f"다운로드 오류: {str(e)}"
+    return send_file(output, as_attachment=True, download_name="재고결과.xlsx")
 
 
-# 🔥 링크 생성
 @app.route('/generate_link', methods=['POST'])
 def generate_link():
-    try:
-        df = pd.DataFrame(request.get_json())
+    df = pd.DataFrame(request.get_json())
 
-        filename = f"result_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
-        filepath = os.path.join(UPLOAD_FOLDER, filename)
+    filename = f"result_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
+    filepath = os.path.join(UPLOAD_FOLDER, filename)
 
-        df.to_excel(filepath, index=False)
+    df.to_excel(filepath, index=False)
 
-        return jsonify({"link": f"/file/{filename}"})
-
-    except Exception as e:
-        return jsonify({"error": str(e)})
+    return jsonify({"link": f"/file/{filename}"})
 
 
-# 🔥 파일 다운로드
 @app.route('/file/<filename>')
 def file_download(filename):
     return send_file(os.path.join(UPLOAD_FOLDER, filename), as_attachment=True)
