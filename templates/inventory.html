@@ -37,11 +37,14 @@ button {
 
 input {
     width:100%;
-    font-size:22px;
-    padding:12px;
-    margin-top:8px;
-    margin-bottom:10px;
-    box-sizing:border-box;
+    font-size:20px;
+    padding:10px;
+    margin:6px 0;
+}
+
+.add-box {
+    background:#fff3e0;
+    border:1px solid #ffcc80;
 }
 </style>
 </head>
@@ -55,14 +58,24 @@ input {
 
 <div id="list"></div>
 
+<datalist id="productList"></datalist>
+
 <script>
 
 let data = {{ data | tojson }};
 let currentIndex = data.findIndex(x => x['실수량'] == null);
 if(currentIndex < 0) currentIndex = 0;
 
+// 상품명 자동검색 리스트
+let productNames = [...new Set(data.map(i => i['상품명']))];
 
-// 🔥 렌더
+window.onload = () => {
+    let list = document.getElementById('productList');
+    list.innerHTML = productNames.map(p => `<option value="${p}">`).join('');
+};
+
+
+// ===== 화면 렌더 =====
 function render(){
 
     let item = data[currentIndex];
@@ -73,19 +86,19 @@ function render(){
         ${currentIndex+1} / ${data.length}<br><br>
 
         로케이션: ${item['로케이션'] || ''}<br>
-        상품명: ${item['상품명']}<br><br>
+        상품명: ${item['상품명']}<br>
+        소비기한: ${item['소비기한'] || ''}<br><br>
 
         재고수량: ${item['재고수량']}<br><br>
 
-        <div>
-            실수량 입력:
-            <input id="qty"
-                value="${item['실수량'] ?? ''}"
-                inputmode="numeric"
-                placeholder="수량 입력"
-                onchange="update(this.value)"
-                onkeydown="enterNext(event)">
-        </div>
+        실수량 입력:
+        <input id="qty"
+            type="tel"
+            value="${item['실수량'] ?? ''}"
+            inputmode="numeric"
+            pattern="[0-9]*"
+            onchange="update(this.value)"
+            onkeydown="enterNext(event)">
 
         <div class="${diffClass}">
             차이: ${item['차이']}
@@ -97,16 +110,35 @@ function render(){
         <button onclick="same()">동일</button>
         <button onclick="next()">다음</button>
     </div>
+
+    <!-- 🔥 신규 재고 입력 -->
+    <div class="card add-box">
+        <b>신규 재고 추가</b><br><br>
+
+        로케이션:
+        <input id="newLoc" placeholder="예: A-01">
+
+        상품명:
+        <input id="newName" list="productList" placeholder="상품 검색">
+
+        소비기한:
+        <input type="date" id="newExp">
+
+        수량:
+        <input id="newQty" type="tel" inputmode="numeric" placeholder="수량">
+
+        <button onclick="addNew()">추가</button>
+    </div>
     `;
 
-    setTimeout(() => {
+    setTimeout(()=>{
         let input = document.getElementById('qty');
         if(input) input.focus();
-    }, 50);
+    },50);
 }
 
 
-// 🔥 값 업데이트 (입력 완료 시만)
+// ===== 기존 업데이트 =====
 function update(v){
     let item = data[currentIndex];
 
@@ -122,23 +154,54 @@ function update(v){
 }
 
 
-// 🔥 엔터 누르면 자동 다음
+// ===== 엔터 이동 =====
 function enterNext(e){
-
     if(e.key === 'Enter'){
-
         e.preventDefault();
-
-        let v = e.target.value;
-
-        update(v);
-
+        update(e.target.value);
         next();
     }
 }
 
 
-// 동일 처리
+// ===== 신규 재고 추가 =====
+function addNew(){
+
+    let loc = document.getElementById('newLoc').value;
+    let name = document.getElementById('newName').value;
+    let exp = document.getElementById('newExp').value;
+    let qty = parseInt(document.getElementById('newQty').value) || 0;
+
+    if(!loc || !name || !exp){
+        return alert('로케이션 / 상품명 / 소비기한 입력 필요');
+    }
+
+    data.push({
+        '로케이션': loc,
+        '상품명': name,
+        '상품코드': name,
+        '소비기한': exp,
+        '재고수량': 0,
+        '실수량': qty,
+        '차이': qty
+    });
+
+    // 자동검색 목록 업데이트
+    if(!productNames.includes(name)){
+        productNames.push(name);
+        document.getElementById('productList').innerHTML += `<option value="${name}">`;
+    }
+
+    alert('추가 완료');
+
+    document.getElementById('newLoc').value='';
+    document.getElementById('newName').value='';
+    document.getElementById('newExp').value='';
+    document.getElementById('newQty').value='';
+}
+
+
+// ===== 동일 =====
 function same(){
     let item = data[currentIndex];
     item['실수량'] = item['재고수량'];
@@ -147,7 +210,7 @@ function same(){
 }
 
 
-// 이동
+// ===== 이동 =====
 function next(){
     if(currentIndex < data.length-1){
         currentIndex++;
@@ -163,7 +226,7 @@ function prev(){
 }
 
 
-// 다운로드
+// ===== 다운로드 =====
 function downloadExcel(){
     fetch('/download',{
         method:'POST',
@@ -174,13 +237,13 @@ function downloadExcel(){
     .then(b=>{
         let a=document.createElement('a');
         a.href=URL.createObjectURL(b);
-        a.download='result.xlsx';
+        a.download='재고조사결과.xlsx';
         a.click();
     });
 }
 
 
-// 링크 공유
+// ===== 공유 =====
 function shareLink(){
     fetch('/generate_link',{
         method:'POST',
@@ -196,7 +259,6 @@ function shareLink(){
 }
 
 
-// 실행
 render();
 
 </script>
