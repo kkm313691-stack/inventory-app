@@ -19,6 +19,12 @@ def clean_number_series(series):
     )
 
 
+# 🔥 날짜 정제 (핵심 추가)
+def clean_date_series(series):
+    return pd.to_datetime(series, errors='coerce') \
+             .dt.strftime('%Y-%m-%d')
+
+
 # 🔥 컬럼 매핑
 def map_columns(df):
     df.columns = df.columns.str.strip()
@@ -69,6 +75,9 @@ def upload():
         df = pd.read_excel(filepath)
         df = map_columns(df)
 
+        # 🔥 날짜 처리 (핵심)
+        df['소비기한'] = clean_date_series(df['소비기한'])
+
         df['재고수량'] = clean_number_series(df['재고수량'])
         df['재고수량'] = pd.to_numeric(df['재고수량'], errors='coerce').fillna(0)
 
@@ -96,6 +105,9 @@ def download():
         df['실수량'] = clean_number_series(df['실수량'])
         df['실수량'] = pd.to_numeric(df['실수량'], errors='coerce')
 
+        # 🔥 날짜 다시 정리
+        df['소비기한'] = clean_date_series(df['소비기한'])
+
         df['차이'] = df['실수량'].fillna(0) - df['재고수량']
 
         output = BytesIO()
@@ -113,7 +125,7 @@ def download():
         return f"다운로드 오류: {str(e)}"
 
 
-# 🔥 링크 생성 (핵심)
+# 🔥 링크 생성
 @app.route('/generate_link', methods=['POST'])
 def generate_link():
     try:
@@ -125,6 +137,9 @@ def generate_link():
 
         df['실수량'] = clean_number_series(df['실수량'])
         df['실수량'] = pd.to_numeric(df['실수량'], errors='coerce')
+
+        # 🔥 날짜 처리
+        df['소비기한'] = clean_date_series(df['소비기한'])
 
         df['차이'] = df['실수량'].fillna(0) - df['재고수량']
 
@@ -141,7 +156,7 @@ def generate_link():
         return jsonify({"error": str(e)})
 
 
-# 🔥 파일 다운로드 링크
+# 🔥 파일 다운로드
 @app.route('/file/<filename>')
 def file_download(filename):
     return send_file(os.path.join(UPLOAD_FOLDER, filename), as_attachment=True)
