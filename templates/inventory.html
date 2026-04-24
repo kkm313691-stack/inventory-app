@@ -11,9 +11,7 @@ body {
     background:#f5f5f5;
 }
 
-h2 {
-    text-align:center;
-}
+h2 { text-align:center; }
 
 button {
     font-size:18px;
@@ -30,9 +28,7 @@ button {
     border-radius:10px;
 }
 
-.done {
-    background:#e8f5e9;
-}
+.done { background:#e8f5e9; }
 
 .diff-red {
     color:red;
@@ -70,7 +66,6 @@ if(currentIndex < 0) currentIndex = 0;
 function render(){
 
     let item = data[currentIndex];
-
     let diffClass = item['차이'] != 0 ? 'diff-red' : '';
 
     document.getElementById('list').innerHTML = `
@@ -88,7 +83,8 @@ function render(){
                 value="${item['실수량'] ?? ''}"
                 inputmode="numeric"
                 placeholder="수량 입력"
-                oninput="update(this.value)">
+                onchange="update(this.value)"
+                onkeydown="enterNext(event)">
         </div>
 
         <div class="${diffClass}">
@@ -103,7 +99,6 @@ function render(){
     </div>
     `;
 
-    // 🔥 자동 포커스
     setTimeout(() => {
         let input = document.getElementById('qty');
         if(input) input.focus();
@@ -111,9 +106,8 @@ function render(){
 }
 
 
-// 🔥 실시간 반영
+// 🔥 값 업데이트 (입력 완료 시만)
 function update(v){
-
     let item = data[currentIndex];
 
     let real = (v === '') ? null : parseInt(v);
@@ -124,7 +118,23 @@ function update(v){
         ? 0
         : item['실수량'] - item['재고수량'];
 
-    render(); // 핵심
+    render();
+}
+
+
+// 🔥 엔터 누르면 자동 다음
+function enterNext(e){
+
+    if(e.key === 'Enter'){
+
+        e.preventDefault();
+
+        let v = e.target.value;
+
+        update(v);
+
+        next();
+    }
 }
 
 
@@ -186,7 +196,7 @@ function shareLink(){
 }
 
 
-// 초기 실행
+// 실행
 render();
 
 </script>
