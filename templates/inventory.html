@@ -5,10 +5,14 @@
 
 <style>
 body { font-size:20px; }
-.card { border:1px solid #ddd; padding:20px; margin:10px; }
+.card { border:1px solid #ddd; padding:20px; margin:10px; border-radius:10px; }
 button { font-size:20px; padding:10px; margin:5px; }
 input { font-size:20px; padding:5px; width:100%; }
+
 .suggestion-item:hover { background:#f0f0f0; }
+
+.expired { color:red; font-weight:bold; }
+.warning { color:orange; }
 </style>
 </head>
 
@@ -29,7 +33,7 @@ let newItems = [];
 let currentIndex = 0;
 let isProcessing = false;
 
-// 🔥 상품명 리스트 (자동완성용)
+// 🔥 상품명 자동완성 리스트
 let productList = [...new Set(data.map(item => item['상품명']).filter(v => v))];
 
 
@@ -37,6 +41,34 @@ let productList = [...new Set(data.map(item => item['상품명']).filter(v => v)
 function cleanNumber(val){
     if(val === null || val === undefined) return 0;
     return parseInt(String(val).replace(/[^0-9.-]/g, '')) || 0;
+}
+
+
+// 날짜 포맷 통일 (🔥 핵심)
+function formatDate(val){
+    if(!val) return '';
+
+    let d = new Date(val);
+    if(isNaN(d)) return val;
+
+    return d.toISOString().slice(0,10);
+}
+
+
+// 유통기한 상태 체크 (🔥 실무 기능)
+function getExpStatus(dateStr){
+
+    if(!dateStr) return '';
+
+    let today = new Date();
+    let exp = new Date(dateStr);
+
+    let diff = (exp - today) / (1000*60*60*24);
+
+    if(diff < 0) return 'expired';
+    if(diff < 30) return 'warning';
+
+    return '';
 }
 
 
@@ -53,12 +85,16 @@ function getValue(item, keys, defaultVal=''){
 
 // 화면 렌더링
 function render(){
+
     let item = data[currentIndex];
 
     let location = getValue(item, ['로케이션']);
     let name = getValue(item, ['상품명']);
     let stock = cleanNumber(getValue(item, ['재고수량'], 0));
-    let exp = getValue(item, ['소비기한']);
+
+    let expRaw = getValue(item, ['소비기한']);
+    let exp = formatDate(expRaw);
+    let expClass = getExpStatus(exp);
 
     let html = `
     <div class="card">
@@ -67,7 +103,7 @@ function render(){
 
         <b>${location}</b><br>
         상품명: ${name}<br>
-        소비기한: ${exp}<br>
+        소비기한: <span class="${expClass}">${exp}</span><br>
         재고수량: ${stock}<br><br>
 
         실수량:
@@ -80,7 +116,7 @@ function render(){
         <br>
         <button onclick="prev()">이전</button>
         <button onclick="next()">다음</button>
-        <button onclick="setSame()">동일</button>
+        <button onclick="setSame()">동일(+)</button>
 
     </div>
     `;
@@ -97,6 +133,7 @@ function render(){
 
 // 값 업데이트
 function updateValue(value){
+
     let item = data[currentIndex];
 
     let stock = cleanNumber(getValue(item, ['재고수량'], 0));
@@ -139,6 +176,7 @@ function setSame(){
 
 // 차이 색상
 function updateDiffColor(){
+
     let item = data[currentIndex];
     let el = document.getElementById('diff');
 
@@ -150,6 +188,7 @@ function updateDiffColor(){
 
 // 다음
 function next(){
+
     let input = document.getElementById('realInput');
     updateValue(input.value);
 
@@ -164,6 +203,7 @@ function next(){
 
 // 이전
 function prev(){
+
     if(currentIndex > 0){
         currentIndex--;
         render();
@@ -173,7 +213,7 @@ function prev(){
 }
 
 
-// 단축키 (+ 동일 처리)
+// 🔥 단축키
 document.addEventListener('keydown', function(e){
 
     if(e.key === 'Enter'){
@@ -188,8 +228,9 @@ document.addEventListener('keydown', function(e){
 });
 
 
-// 🔥 신규 재고 입력 (자동완성 포함)
+// 🔥 신규 재고 입력
 function openNewItem(){
+
     let html = `
     <div class="card">
 
@@ -203,7 +244,7 @@ function openNewItem(){
         <div id="suggestions" style="border:1px solid #ccc;"></div><br><br>
 
         소비기한:
-        <input type="text" id="new_exp"><br><br>
+        <input type="date" id="new_exp"><br><br>
 
         실수량:
         <input type="number" id="new_qty"><br><br>
@@ -213,6 +254,7 @@ function openNewItem(){
 
     </div>
     `;
+
     document.getElementById('list').innerHTML = html;
 }
 
@@ -232,7 +274,8 @@ function showSuggestions(value){
     ).slice(0, 5);
 
     let html = filtered.map(name => `
-        <div class="suggestion-item" style="padding:5px; border-bottom:1px solid #eee; cursor:pointer;"
+        <div class="suggestion-item"
+            style="padding:5px; border-bottom:1px solid #eee; cursor:pointer;"
             onclick="selectProduct('${name}')">
             ${name}
         </div>
@@ -251,9 +294,10 @@ function selectProduct(name){
 
 // 신규 저장
 function saveNewItem(){
+
     let location = document.getElementById('new_location').value.trim();
     let name = document.getElementById('new_name').value.trim();
-    let exp = document.getElementById('new_exp').value.trim();
+    let exp = document.getElementById('new_exp').value;
     let qty = document.getElementById('new_qty').value;
 
     if(!location || !name || qty === ''){
@@ -274,7 +318,6 @@ function saveNewItem(){
 
     newItems.push(item);
 
-    // 🔥 자동완성 리스트 업데이트
     productList.push(name);
     productList = [...new Set(productList)];
 
