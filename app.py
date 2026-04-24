@@ -55,8 +55,14 @@ def map_columns(df):
             col_map[col] = '입수'
 
     df = df.rename(columns=col_map)
+
     df = df.loc[:, ~df.columns.duplicated()]
     df = df.reset_index(drop=True)
+
+    required = ['상품명', '로케이션']
+    for r in required:
+        if r not in df.columns:
+            raise Exception(f"필수 컬럼 없음: {r}")
 
     return df
 
@@ -70,6 +76,7 @@ def index():
 def upload():
     try:
         file = request.files.get('file')
+
         if not file:
             return "파일 없음"
 
@@ -80,21 +87,24 @@ def upload():
         df = map_columns(df)
 
         # 재고수량
-        df['재고수량'] = pd.to_numeric(clean_number_series(df.get('재고수량', 0)), errors='coerce').fillna(0)
+        if '재고수량' in df.columns:
+            df['재고수량'] = pd.to_numeric(clean_number_series(df['재고수량']), errors='coerce').fillna(0)
+        else:
+            df['재고수량'] = 0
 
         # 소비기한
-        df['소비기한'] = clean_date_series(df.get('소비기한', ''))
+        if '소비기한' in df.columns:
+            df['소비기한'] = clean_date_series(df['소비기한'])
+        else:
+            df['소비기한'] = ''
 
-        # 🔥 실수량 (이어하기 핵심)
+        # 🔥 이어하기 핵심
         if '실수량' in df.columns:
             df['실수량'] = pd.to_numeric(clean_number_series(df['실수량']), errors='coerce')
         else:
             df['실수량'] = None
 
-        # 🔥 NaN → None
-        df['실수량'] = df['실수량'].where(pd.notnull(df['실수량']), None)
-
-        # 차이
+        # 차이 재계산
         df['차이'] = df['실수량'].fillna(0) - df['재고수량']
 
         # 정렬
@@ -113,10 +123,6 @@ def upload():
 @app.route('/download', methods=['POST'])
 def download():
     df = pd.DataFrame(request.get_json())
-
-    # 🔥 NaN → 빈값
-    df = df.where(pd.notnull(df), None)
-
     df['차이'] = df['실수량'].fillna(0) - df['재고수량']
 
     output = BytesIO()
@@ -133,7 +139,6 @@ def generate_link():
     filename = f"result_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
     filepath = os.path.join(UPLOAD_FOLDER, filename)
 
-    df = df.where(pd.notnull(df), None)
     df.to_excel(filepath, index=False)
 
     return jsonify({"link": f"/file/{filename}"})
