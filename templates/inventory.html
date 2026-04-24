@@ -40,7 +40,6 @@ input {
     font-size:20px;
     padding:10px;
     margin:6px 0;
-    box-sizing:border-box;
 }
 
 .add-box {
@@ -67,20 +66,63 @@ let data = {{ data | tojson }};
 let currentIndex = data.findIndex(x => x['실수량'] == null);
 if(currentIndex < 0) currentIndex = 0;
 
-// 상품명 자동검색 리스트
+// 🔥 상품명 리스트
 let productNames = [...new Set(data.map(i => i['상품명']))];
 
-window.onload = () => {
+
+// ===== 자동검색 필터 =====
+function filterProducts(keyword){
     let list = document.getElementById('productList');
-    list.innerHTML = productNames.map(p => `<option value="${p}">`).join('');
-};
+
+    let filtered = productNames.filter(p =>
+        p.toLowerCase().includes(keyword.toLowerCase())
+    );
+
+    list.innerHTML = filtered.map(p => `<option value="${p}">`).join('');
+}
 
 
-// ===== 화면 렌더 =====
+// ===== 신규 입력 토글 =====
+let showAdd = false;
+
+function toggleAdd(){
+    showAdd = !showAdd;
+    render();
+}
+
+
+// ===== 렌더 =====
 function render(){
 
     let item = data[currentIndex];
     let diffClass = item['차이'] != 0 ? 'diff-red' : '';
+
+    let addHtml = '';
+
+    if(showAdd){
+        addHtml = `
+        <div class="card add-box">
+            <b>신규 재고 추가</b><br><br>
+
+            로케이션:
+            <input id="newLoc" placeholder="예: A-01">
+
+            상품명:
+            <input id="newName"
+                list="productList"
+                placeholder="상품 검색"
+                oninput="filterProducts(this.value)">
+
+            소비기한:
+            <input type="date" id="newExp">
+
+            수량:
+            <input id="newQty" type="tel" inputmode="numeric" placeholder="수량">
+
+            <button onclick="addNew()">추가</button>
+        </div>
+        `;
+    }
 
     document.getElementById('list').innerHTML = `
     <div class="card ${item['실수량']!=null?'done':''}">
@@ -98,7 +140,6 @@ function render(){
             value="${item['실수량'] ?? ''}"
             inputmode="numeric"
             pattern="[0-9]*"
-            placeholder="수량 입력"
             onkeydown="enterNext(event)">
 
         <div class="${diffClass}">
@@ -110,26 +151,10 @@ function render(){
         <button onclick="saveAndNext()">완료</button>
         <button onclick="prev()">이전</button>
         <button onclick="same()">동일</button>
+        <button onclick="toggleAdd()">신규 재고 추가</button>
     </div>
 
-    <!-- 신규 재고 입력 -->
-    <div class="card add-box">
-        <b>신규 재고 추가</b><br><br>
-
-        로케이션:
-        <input id="newLoc" placeholder="예: A-01">
-
-        상품명:
-        <input id="newName" list="productList" placeholder="상품 검색">
-
-        소비기한:
-        <input type="date" id="newExp">
-
-        수량:
-        <input id="newQty" type="tel" inputmode="numeric" placeholder="수량">
-
-        <button onclick="addNew()">추가</button>
-    </div>
+    ${addHtml}
     `;
 
     setTimeout(()=>{
@@ -159,7 +184,7 @@ function saveAndNext(){
 }
 
 
-// ===== 엔터 처리 =====
+// ===== 엔터 =====
 function enterNext(e){
     if(e.key === 'Enter'){
         e.preventDefault();
@@ -168,7 +193,7 @@ function enterNext(e){
 }
 
 
-// ===== 신규 재고 추가 =====
+// ===== 신규 추가 =====
 function addNew(){
 
     let loc = document.getElementById('newLoc').value;
@@ -177,7 +202,7 @@ function addNew(){
     let qty = parseInt(document.getElementById('newQty').value) || 0;
 
     if(!loc || !name || !exp){
-        return alert('로케이션 / 상품명 / 소비기한 입력 필요');
+        return alert('필수 입력');
     }
 
     data.push({
@@ -192,15 +217,12 @@ function addNew(){
 
     if(!productNames.includes(name)){
         productNames.push(name);
-        document.getElementById('productList').innerHTML += `<option value="${name}">`;
     }
 
     alert('추가 완료');
 
-    document.getElementById('newLoc').value='';
-    document.getElementById('newName').value='';
-    document.getElementById('newExp').value='';
-    document.getElementById('newQty').value='';
+    showAdd = false;
+    render();
 }
 
 
@@ -216,7 +238,6 @@ function same(){
 // ===== 이동 =====
 function next(){
 
-    // 🔥 입력 안된 다음 항목으로 이동
     let nextIndex = data.findIndex((x, i) => i > currentIndex && x['실수량'] == null);
 
     if(nextIndex !== -1){
