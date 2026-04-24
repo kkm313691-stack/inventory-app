@@ -2,12 +2,14 @@
 
 let data = {{ data | tojson }};
 
-// 🔥 이어하기 시작 위치
-let currentIndex = data.findIndex(x =>
-    x['실수량'] === null ||
-    x['실수량'] === '' ||
-    x['실수량'] === undefined
-);
+// 🔥 공통 판별 함수
+function isEmpty(v){
+    return v === null || v === undefined || v === '' || v === 'nan' || isNaN(v);
+}
+
+
+// 🔥 시작 위치 (이어하기)
+let currentIndex = data.findIndex(x => isEmpty(x['실수량']));
 
 if(currentIndex === -1){
     currentIndex = data.length - 1;
@@ -15,12 +17,11 @@ if(currentIndex === -1){
 }
 
 
-// ===== 다음 이동 (스킵 기능) =====
+// ===== 다음 이동 =====
 function next(){
 
     let nextIndex = data.findIndex((x, i) =>
-        i > currentIndex &&
-        (x['실수량'] === null || x['실수량'] === '')
+        i > currentIndex && isEmpty(x['실수량'])
     );
 
     if(nextIndex !== -1){
@@ -35,5 +36,89 @@ function next(){
         alert('모든 재고조사 완료');
     }
 }
+
+
+// ===== render 핵심 수정 =====
+function render(){
+
+    let item = data[currentIndex];
+
+    document.getElementById('list').innerHTML = `
+    <div class="card">
+
+        로케이션: ${item['로케이션']}<br>
+        상품명: ${item['상품명']}<br>
+
+        재고수량: ${item['재고수량']}<br><br>
+
+        실수량:
+        <input id="qty"
+            value="${isEmpty(item['실수량']) ? '' : item['실수량']}"
+            oninput="update(this.value)"
+            onkeydown="enterNext(event)">
+
+        <div id="diff">
+            차이: ${item['차이']}
+        </div>
+
+        <div class="btn-row">
+            <button onclick="prev()">이전</button>
+            <button onclick="same()">동일</button>
+            <button onclick="saveAndNext()">다음</button>
+        </div>
+
+    </div>
+    `;
+}
+
+
+// ===== 업데이트 =====
+function update(v){
+    let item = data[currentIndex];
+
+    let real = isEmpty(v) ? null : parseInt(v);
+
+    item['실수량'] = isNaN(real) ? null : real;
+    item['차이'] = item['실수량'] == null ? 0 : item['실수량'] - item['재고수량'];
+
+    document.getElementById('diff').innerText = "차이: " + item['차이'];
+}
+
+
+// ===== 엔터 =====
+function enterNext(e){
+    if(e.key === 'Enter'){
+        e.preventDefault();
+        saveAndNext();
+    }
+}
+
+
+// ===== 저장 후 이동 =====
+function saveAndNext(){
+    let input = document.getElementById('qty');
+    if(input) update(input.value);
+    next();
+}
+
+
+// ===== 동일 =====
+function same(){
+    let item = data[currentIndex];
+    item['실수량'] = item['재고수량'];
+    item['차이'] = 0;
+    next();
+}
+
+
+// ===== 이전 =====
+function prev(){
+    if(currentIndex > 0){
+        currentIndex--;
+        render();
+    }
+}
+
+render();
 
 </script>
