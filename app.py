@@ -11,6 +11,7 @@ UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 
+# ===== 숫자 정리 =====
 def clean_number_series(series):
     return (
         series.astype(str)
@@ -19,16 +20,19 @@ def clean_number_series(series):
     )
 
 
+# ===== 날짜 정리 =====
 def clean_date_series(series):
     return pd.to_datetime(series, errors='coerce').dt.strftime('%Y-%m-%d')
 
 
+# ===== 자연 정렬 =====
 def natural_sort_key(s):
     if pd.isna(s):
         return []
     return [int(text) if text.isdigit() else text for text in re.split(r'(\d+)', str(s))]
 
 
+# ===== 컬럼 매핑 + 안정화 =====
 def map_columns(df):
     df.columns = df.columns.str.strip()
 
@@ -52,8 +56,16 @@ def map_columns(df):
         elif '입수' in c:
             col_map[col] = '입수'
 
+    # 🔥 컬럼명 통일
     df = df.rename(columns=col_map)
 
+    # 🔥🔥 핵심: 중복 컬럼 제거 (에러 해결)
+    df = df.loc[:, ~df.columns.duplicated()]
+
+    # 🔥 인덱스 초기화 (추가 안정성)
+    df = df.reset_index(drop=True)
+
+    # 🔥 필수 컬럼 체크
     required = ['상품명', '로케이션']
     for r in required:
         if r not in df.columns:
@@ -67,13 +79,14 @@ def index():
     return render_template('upload.html')
 
 
+# ===== 업로드 =====
 @app.route('/upload', methods=['POST'])
 def upload():
     try:
         file = request.files.get('file')
 
-        if not file:
-            return "파일 없음"
+        if not file or file.filename == '':
+            return "파일을 선택해주세요."
 
         filepath = os.path.join(UPLOAD_FOLDER, file.filename)
         file.save(filepath)
@@ -81,35 +94,35 @@ def upload():
         df = pd.read_excel(filepath)
         df = map_columns(df)
 
-        # 🔥 숫자 정리
+        # ===== 재고수량 =====
         if '재고수량' in df.columns:
             df['재고수량'] = pd.to_numeric(clean_number_series(df['재고수량']), errors='coerce').fillna(0)
         else:
             df['재고수량'] = 0
 
-        # 🔥 날짜 정리
+        # ===== 소비기한 =====
         if '소비기한' in df.columns:
             df['소비기한'] = clean_date_series(df['소비기한'])
         else:
             df['소비기한'] = ''
 
-        # 🔥 실수량
+        # ===== 실수량 =====
         if '실수량' in df.columns:
             df['실수량'] = pd.to_numeric(clean_number_series(df['실수량']), errors='coerce')
         else:
             df['실수량'] = None
 
-        # 🔥 차이
+        # ===== 차이 =====
         df['차이'] = df['실수량'].fillna(0) - df['재고수량']
 
-        # 🔥 복합키 생성 (상품코드 대체)
+        # ===== 🔥 복합키 (상품코드 대체) =====
         df['고유키'] = (
             df['상품명'].astype(str) + "_" +
             df['로케이션'].astype(str) + "_" +
             df['소비기한'].astype(str)
         )
 
-        # 🔥 정렬
+        # ===== 정렬 =====
         if '로케이션' in df.columns:
             df = df.sort_values(
                 by='로케이션',
@@ -122,34 +135,50 @@ def upload():
         )
 
     except Exception as e:
-        return f"오류: {str(e)}"
+        return f"업로드 오류: {str(e)}"
 
 
+# ===== 다운로드 =====
 @app.route('/download', methods=['POST'])
 def download():
-    df = pd.DataFrame(request.get_json())
+    try:
+        df = pd.DataFrame(request.get_json())
 
-    df['차이'] = df['실수량'].fillna(0) - df['재고수량']
+        df['차이'] = df['실수량'].fillna(0) - df['재고수량']
 
-    output = BytesIO()
-    df.to_excel(output, index=False)
-    output.seek(0)
+        output = BytesIO()
+        df.to_excel(output, index=False)
+        output.seek(0)
 
-    return send_file(output, as_attachment=True, download_name="재고조사결과.xlsx")
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name="재고조사결과.xlsx",
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+
+    except Exception as e:
+        return f"다운로드 오류: {str(e)}"
 
 
+# ===== 링크 생성 =====
 @app.route('/generate_link', methods=['POST'])
 def generate_link():
-    df = pd.DataFrame(request.get_json())
+    try:
+        df = pd.DataFrame(request.get_json())
 
-    filename = f"result_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
-    filepath = os.path.join(UPLOAD_FOLDER, filename)
+        filename = f"result_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
 
-    df.to_excel(filepath, index=False)
+        df.to_excel(filepath, index=False)
 
-    return jsonify({"link": f"/file/{filename}"})
+        return jsonify({"link": f"/file/{filename}"})
+
+    except Exception as e:
+        return jsonify({"error": str(e)})
 
 
+# ===== 파일 다운로드 =====
 @app.route('/file/<filename>')
 def file_download(filename):
     return send_file(os.path.join(UPLOAD_FOLDER, filename), as_attachment=True)
