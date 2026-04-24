@@ -1,22 +1,94 @@
 <!DOCTYPE html>
 <html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<style>
+body {
+    font-size:18px;
+    margin:0;
+    padding:20px;
+    background:#f5f5f5;
+    text-align:center;
+}
+
+h2 {
+    margin-bottom:30px;
+}
+
+/* 🔥 업로드 박스 */
+.upload-box {
+    background:#fff;
+    border:2px dashed #ccc;
+    padding:30px;
+    border-radius:12px;
+}
+
+/* 🔥 파일 버튼 숨기기 */
+input[type="file"] {
+    display:none;
+}
+
+/* 🔥 커스텀 버튼 */
+.file-label {
+    display:block;
+    background:#4CAF50;
+    color:white;
+    padding:20px;
+    font-size:20px;
+    border-radius:10px;
+    margin-bottom:20px;
+}
+
+/* 🔥 업로드 버튼 */
+button {
+    width:100%;
+    padding:18px;
+    font-size:20px;
+    background:#2196F3;
+    color:white;
+    border:none;
+    border-radius:10px;
+}
+
+/* 🔥 파일명 표시 */
+#filename {
+    margin-top:10px;
+    font-size:16px;
+    color:#333;
+}
+
+</style>
+</head>
+
 <body>
 
-<h2>재고조사 업로드</h2>
+<h2>재고조사 파일 업로드</h2>
 
 <form action="/upload" method="post" enctype="multipart/form-data">
 
-    <input type="file" name="file" required><br><br>
+    <div class="upload-box">
 
-    <label><input type="radio" name="mode" value="location" checked>
-        로케이션 조사</label><br>
+        <label for="file" class="file-label">
+            📁 엑셀 파일 선택
+        </label>
 
-    <label><input type="radio" name="mode" value="scan">
-        바코드 조사</label><br><br>
+        <input type="file" name="file" id="file" onchange="showName()">
 
-    <button type="submit">시작</button>
+        <div id="filename"></div>
+
+        <button type="submit">업로드 시작</button>
+
+    </div>
 
 </form>
+
+<script>
+function showName(){
+    let file = document.getElementById('file').files[0];
+    document.getElementById('filename').innerText = file ? file.name : '';
+}
+</script>
 
 </body>
 </html>
