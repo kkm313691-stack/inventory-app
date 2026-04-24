@@ -1,282 +1,27 @@
-<!DOCTYPE html>
-<html>
-<head>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-
-<style>
-body {
-    font-size:18px;
-    margin:0;
-    padding:10px;
-    background:#f5f5f5;
-}
-
-h2 { text-align:center; }
-
-button {
-    font-size:18px;
-    padding:14px;
-    margin:5px 0;
-    width:100%;
-}
-
-.card {
-    border:1px solid #ddd;
-    padding:20px;
-    margin:10px 0;
-    background:#fff;
-    border-radius:10px;
-}
-
-.done { background:#e8f5e9; }
-
-.diff-red {
-    color:red;
-    font-weight:bold;
-}
-
-input {
-    width:100%;
-    font-size:20px;
-    padding:10px;
-    margin:6px 0;
-    box-sizing:border-box;
-}
-
-.add-box {
-    background:#fff3e0;
-    border:1px solid #ffcc80;
-}
-
-/* 🔥 버튼 가로 */
-.btn-row {
-    display:flex;
-    gap:8px;
-}
-.btn-row button {
-    flex:1;
-}
-.next-btn {
-    background:#4CAF50;
-    color:white;
-}
-</style>
-</head>
-
-<body>
-
-<h2>재고조사</h2>
-
-<button onclick="downloadExcel()">다운로드</button>
-<button onclick="shareLink()">공유</button>
-
-<div id="list"></div>
-
-<datalist id="productList"></datalist>
-
 <script>
 
 let data = {{ data | tojson }};
-let currentIndex = data.findIndex(x => x['실수량'] == null);
-if(currentIndex < 0) currentIndex = 0;
 
-let productNames = [...new Set(data.map(i => i['상품명']))];
+// 🔥 이어하기 시작 위치
+let currentIndex = data.findIndex(x =>
+    x['실수량'] === null ||
+    x['실수량'] === '' ||
+    x['실수량'] === undefined
+);
 
-
-// ===== 자동검색 =====
-function filterProducts(keyword){
-    let list = document.getElementById('productList');
-
-    let filtered = productNames.filter(p =>
-        p.toLowerCase().includes(keyword.toLowerCase())
-    );
-
-    list.innerHTML = filtered.map(p => `<option value="${p}">`).join('');
+if(currentIndex === -1){
+    currentIndex = data.length - 1;
+    alert('이미 모든 재고조사가 완료되었습니다');
 }
 
 
-// ===== 신규 입력 토글 =====
-let showAdd = false;
-function toggleAdd(){
-    showAdd = !showAdd;
-    render();
-}
-
-
-// ===== 렌더 =====
-function render(){
-
-    let item = data[currentIndex];
-    let diffClass = item['차이'] != 0 ? 'diff-red' : '';
-
-    let addHtml = '';
-
-    if(showAdd){
-        addHtml = `
-        <div class="card add-box">
-            <b>신규 재고 추가</b><br><br>
-
-            로케이션:
-            <input id="newLoc">
-
-            상품명:
-            <input id="newName"
-                list="productList"
-                oninput="filterProducts(this.value)">
-
-            소비기한:
-            <input type="date" id="newExp">
-
-            수량:
-            <input id="newQty" type="tel" inputmode="numeric">
-
-            <button onclick="addNew()">추가</button>
-        </div>
-        `;
-    }
-
-    document.getElementById('list').innerHTML = `
-    <div class="card ${item['실수량']!=null?'done':''}">
-        ${currentIndex+1} / ${data.length}<br><br>
-
-        로케이션: ${item['로케이션'] || ''}<br>
-        상품명: ${item['상품명']}<br>
-        소비기한: ${item['소비기한'] || ''}<br><br>
-
-        재고수량: ${item['재고수량']}<br><br>
-
-        실수량 입력:
-        <input id="qty"
-            type="tel"
-            value="${item['실수량'] ?? ''}"
-            inputmode="numeric"
-            oninput="liveUpdate(this.value)"
-            onkeydown="enterNext(event)">
-
-        <div id="diff" class="${diffClass}">
-            차이: ${item['차이']}
-        </div>
-
-        <br>
-
-        <!-- 🔥 버튼 가로 UI -->
-        <div class="btn-row">
-            <button onclick="prev()">이전</button>
-            <button onclick="same()">동일</button>
-            <button class="next-btn" onclick="saveAndNext()">다음</button>
-        </div>
-
-        <button onclick="toggleAdd()">신규 재고 추가</button>
-    </div>
-
-    ${addHtml}
-    `;
-
-    setTimeout(()=>{
-        let input = document.getElementById('qty');
-        if(input) input.focus();
-    },50);
-}
-
-
-// ===== 실시간 차이 =====
-function liveUpdate(v){
-
-    let item = data[currentIndex];
-
-    let real = (v === '') ? null : parseInt(v);
-
-    item['실수량'] = isNaN(real) ? null : real;
-
-    item['차이'] = item['실수량'] == null
-        ? 0
-        : item['실수량'] - item['재고수량'];
-
-    let diffDiv = document.getElementById('diff');
-
-    if(diffDiv){
-        diffDiv.innerText = "차이: " + item['차이'];
-
-        if(item['차이'] != 0){
-            diffDiv.classList.add('diff-red');
-        }else{
-            diffDiv.classList.remove('diff-red');
-        }
-    }
-}
-
-
-// ===== 저장 + 다음 =====
-function saveAndNext(){
-    let input = document.getElementById('qty');
-    if(input) liveUpdate(input.value);
-    next();
-}
-
-
-// ===== 엔터 =====
-function enterNext(e){
-    if(e.key === 'Enter'){
-        e.preventDefault();
-        saveAndNext();
-    }
-}
-
-
-// ===== 신규 추가 (안정 버전) =====
-function addNew(){
-
-    let locEl = document.getElementById('newLoc');
-    let nameEl = document.getElementById('newName');
-    let expEl = document.getElementById('newExp');
-    let qtyEl = document.getElementById('newQty');
-
-    if(!locEl || !nameEl || !expEl || !qtyEl){
-        return alert('입력창이 열려있지 않습니다');
-    }
-
-    let loc = locEl.value.trim();
-    let name = nameEl.value.trim();
-    let exp = expEl.value;
-    let qty = parseInt(qtyEl.value) || 0;
-
-    if(!loc || !name || !exp){
-        return alert('로케이션 / 상품명 / 소비기한 입력 필요');
-    }
-
-    data.push({
-        '로케이션': loc,
-        '상품명': name,
-        '소비기한': exp,
-        '재고수량': 0,
-        '실수량': qty,
-        '차이': qty
-    });
-
-    if(!productNames.includes(name)){
-        productNames.push(name);
-    }
-
-    alert('추가 완료');
-
-    showAdd = false;
-    render();
-}
-
-
-// ===== 동일 =====
-function same(){
-    let item = data[currentIndex];
-    item['실수량'] = item['재고수량'];
-    item['차이'] = 0;
-    next();
-}
-
-
-// ===== 이동 =====
+// ===== 다음 이동 (스킵 기능) =====
 function next(){
 
-    let nextIndex = data.findIndex((x, i) => i > currentIndex && x['실수량'] == null);
+    let nextIndex = data.findIndex((x, i) =>
+        i > currentIndex &&
+        (x['실수량'] === null || x['실수량'] === '')
+    );
 
     if(nextIndex !== -1){
         currentIndex = nextIndex;
@@ -286,53 +31,9 @@ function next(){
 
     if(currentIndex < data.length){
         render();
+    } else {
+        alert('모든 재고조사 완료');
     }
 }
-
-function prev(){
-    if(currentIndex > 0){
-        currentIndex--;
-        render();
-    }
-}
-
-
-// ===== 다운로드 =====
-function downloadExcel(){
-    fetch('/download',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify(data)
-    })
-    .then(r=>r.blob())
-    .then(b=>{
-        let a=document.createElement('a');
-        a.href=URL.createObjectURL(b);
-        a.download='재고조사결과.xlsx';
-        a.click();
-    });
-}
-
-
-// ===== 공유 =====
-function shareLink(){
-    fetch('/generate_link',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify(data)
-    })
-    .then(r=>r.json())
-    .then(r=>{
-        let url=location.origin+r.link;
-        navigator.clipboard.writeText(url);
-        alert("링크 복사됨:\n"+url);
-    });
-}
-
-
-render();
 
 </script>
-
-</body>
-</html>
