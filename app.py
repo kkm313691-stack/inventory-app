@@ -39,8 +39,6 @@ def map_columns(df):
 
         if '상품' in c or '품명' in c:
             col_map[col] = '상품명'
-        elif '코드' in c or '바코드' in c:
-            col_map[col] = '상품코드'
         elif '로케이션' in c or '랙' in c or '위치' in c:
             col_map[col] = '로케이션'
         elif '소비' in c or '유통' in c:
@@ -56,8 +54,10 @@ def map_columns(df):
 
     df = df.rename(columns=col_map)
 
-    if '상품명' not in df.columns:
-        raise Exception("필수 컬럼 없음: 상품명")
+    required = ['상품명', '로케이션']
+    for r in required:
+        if r not in df.columns:
+            raise Exception(f"필수 컬럼 없음: {r}")
 
     return df
 
@@ -81,33 +81,44 @@ def upload():
         df = pd.read_excel(filepath)
         df = map_columns(df)
 
-        if '상품코드' not in df.columns:
-            df['상품코드'] = df['상품명']
-
+        # 🔥 숫자 정리
         if '재고수량' in df.columns:
             df['재고수량'] = pd.to_numeric(clean_number_series(df['재고수량']), errors='coerce').fillna(0)
         else:
             df['재고수량'] = 0
 
+        # 🔥 날짜 정리
         if '소비기한' in df.columns:
             df['소비기한'] = clean_date_series(df['소비기한'])
         else:
             df['소비기한'] = ''
 
+        # 🔥 실수량
         if '실수량' in df.columns:
             df['실수량'] = pd.to_numeric(clean_number_series(df['실수량']), errors='coerce')
         else:
             df['실수량'] = None
 
+        # 🔥 차이
         df['차이'] = df['실수량'].fillna(0) - df['재고수량']
 
+        # 🔥 복합키 생성 (상품코드 대체)
+        df['고유키'] = (
+            df['상품명'].astype(str) + "_" +
+            df['로케이션'].astype(str) + "_" +
+            df['소비기한'].astype(str)
+        )
+
+        # 🔥 정렬
         if '로케이션' in df.columns:
-            df = df.sort_values(by='로케이션', key=lambda col: col.map(natural_sort_key))
+            df = df.sort_values(
+                by='로케이션',
+                key=lambda col: col.map(natural_sort_key)
+            )
 
         return render_template(
             'inventory.html',
-            data=df.to_dict(orient='records'),
-            mode='location'
+            data=df.to_dict(orient='records')
         )
 
     except Exception as e:
@@ -117,13 +128,14 @@ def upload():
 @app.route('/download', methods=['POST'])
 def download():
     df = pd.DataFrame(request.get_json())
+
     df['차이'] = df['실수량'].fillna(0) - df['재고수량']
 
     output = BytesIO()
     df.to_excel(output, index=False)
     output.seek(0)
 
-    return send_file(output, as_attachment=True, download_name="재고결과.xlsx")
+    return send_file(output, as_attachment=True, download_name="재고조사결과.xlsx")
 
 
 @app.route('/generate_link', methods=['POST'])
