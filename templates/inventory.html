@@ -2,212 +2,191 @@
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-
 <style>
 body { font-size:20px; }
-.card { border:1px solid #ddd; padding:20px; margin:10px; border-radius:10px; }
+.card { border:1px solid #ddd; padding:20px; margin:10px; }
 .done { background:#e8f5e9; }
-button { font-size:20px; padding:10px; margin:5px; }
-input { font-size:20px; padding:5px; width:100%; }
-.expired { color:red; font-weight:bold; }
-.warning { color:orange; }
 </style>
 </head>
 
 <body>
 
-<h2>재고 조사</h2>
+<h2>재고조사</h2>
 
-<button onclick="downloadExcel()">엑셀 다운로드</button>
-<button onclick="shareLink()">공유하기</button>
+<button onclick="downloadExcel()">다운로드</button>
+<button onclick="shareLink()">공유</button>
 
 <div id="list"></div>
 
 <script>
 
 let data = {{ data | tojson }};
-let newItems = [];
-let isProcessing = false;
+let mode = "{{ mode }}";
+
+let productMap = {};
+data.forEach(i => productMap[i['상품코드']] = i);
+
+let currentIndex = data.findIndex(x => x['실수량'] == null);
+if(currentIndex < 0) currentIndex = 0;
 
 
-// 🔥 시작 위치 찾기 (이어하기 핵심)
-function findStartIndex(){
-    for(let i=0; i<data.length; i++){
-        if(data[i]['실수량'] === null || data[i]['실수량'] === undefined){
-            return i;
-        }
-    }
-    return 0;
-}
-
-let currentIndex = findStartIndex();
-
-
-// 숫자
-function cleanNumber(val){
-    return parseInt(String(val || 0).replace(/[^0-9.-]/g, '')) || 0;
+// ===== 공통 =====
+function cleanNumber(v){
+    return parseInt(v || 0) || 0;
 }
 
 
-// 날짜 포맷
-function formatDate(val){
-    if(!val) return '';
-    let d = new Date(val);
-    if(isNaN(d)) return val;
-    return d.toISOString().slice(0,10);
-}
-
-
-// 유통기한 상태
-function getExpStatus(dateStr){
-    if(!dateStr) return '';
-    let today = new Date();
-    let exp = new Date(dateStr);
-    let diff = (exp - today) / (1000*60*60*24);
-    if(diff < 0) return 'expired';
-    if(diff < 30) return 'warning';
-    return '';
-}
-
-
-// 렌더
+// ===== 모드 분기 =====
 function render(){
+    if(mode === 'scan') renderScan();
+    else renderLocation();
+}
+
+
+// ===== 로케이션 =====
+function renderLocation(){
 
     let item = data[currentIndex];
-
-    let stock = cleanNumber(item['재고수량']);
-    let exp = formatDate(item['소비기한']);
-    let expClass = getExpStatus(exp);
-
-    let done = item['실수량'] !== null && item['실수량'] !== undefined;
 
     document.getElementById('list').innerHTML = `
-    <div class="card ${done ? 'done' : ''}">
-
-        <h3>${currentIndex+1} / ${data.length}</h3>
-
-        <b>${item['로케이션']}</b><br>
+    <div class="card ${item['실수량']!=null?'done':''}">
+        ${currentIndex+1}/${data.length}<br>
+        ${item['로케이션']||''}<br>
         ${item['상품명']}<br>
-        소비기한: <span class="${expClass}">${exp}</span><br>
-        재고수량: ${stock}<br><br>
+        재고:${item['재고수량']}<br>
 
-        실수량:
-        <input type="number" id="realInput"
-            value="${item['실수량'] ?? ''}"
-            oninput="updateValue(this.value)">
+        <input id="qty" value="${item['실수량']||''}"
+        oninput="update(this.value)">
 
-        <div id="diff">차이: ${item['차이'] ?? 0}</div>
+        <div>차이:${item['차이']}</div>
 
-        <br>
         <button onclick="prev()">이전</button>
         <button onclick="next()">다음</button>
-        <button onclick="setSame()">동일(+)</button>
-
+        <button onclick="same()">동일</button>
     </div>
     `;
-
-    updateDiffColor();
-
-    setTimeout(()=>document.getElementById('realInput').focus(),100);
 }
 
-
-// 값 업데이트
-function updateValue(value){
+function update(v){
     let item = data[currentIndex];
-    let stock = cleanNumber(item['재고수량']);
-    let real = value ? parseInt(value) : null;
-
+    let real = v ? parseInt(v) : null;
     item['실수량'] = real;
-    item['차이'] = real === null ? 0 : real - stock;
-
-    document.getElementById('diff').innerText = '차이: ' + item['차이'];
-    updateDiffColor();
+    item['차이'] = real==null?0:real-item['재고수량'];
 }
 
-
-// 동일
-function setSame(){
-    if(isProcessing) return;
-    isProcessing = true;
-
+function same(){
     let item = data[currentIndex];
-    let stock = cleanNumber(item['재고수량']);
-
-    item['실수량'] = stock;
+    item['실수량'] = item['재고수량'];
     item['차이'] = 0;
-
-    render();
-
-    setTimeout(()=>{
-        next();
-        isProcessing = false;
-    },100);
+    next();
 }
 
-
-// 색상
-function updateDiffColor(){
-    let el = document.getElementById('diff');
-    let item = data[currentIndex];
-    if(el) el.style.color = item['차이'] !== 0 ? 'red' : 'black';
-}
-
-
-// 이동
 function next(){
     if(currentIndex < data.length-1){
         currentIndex++;
         render();
-    }else alert('마지막입니다');
+    }
 }
 
 function prev(){
-    if(currentIndex > 0){
+    if(currentIndex>0){
         currentIndex--;
         render();
-    }else alert('처음입니다');
+    }
 }
 
 
-// 다운로드
+// ===== 바코드 =====
+let currentItem=null;
+
+function renderScan(){
+    document.getElementById('list').innerHTML = `
+    <div class="card">
+
+    바코드:<input id="barcode" onkeydown="scan(event)"><br>
+    상품:<div id="name"></div><br>
+
+    박스:<input id="box"><br>
+    낱개:<input id="each"><br>
+    소비기한:<input type="date" id="exp"><br>
+
+    <button onclick="saveScan()">저장</button>
+
+    </div>
+    `;
+}
+
+function scan(e){
+    if(e.key==='Enter'){
+        let code = e.target.value;
+        let item = productMap[code];
+        if(!item) return alert('없음');
+
+        currentItem = item;
+        document.getElementById('name').innerText = item['상품명'];
+    }
+}
+
+function saveScan(){
+
+    if(!currentItem) return alert('스캔');
+
+    let box = parseInt(box.value)||0;
+    let each = parseInt(each.value)||0;
+    let unit = currentItem['입수']||1;
+
+    let qty = box*unit + each;
+
+    data.push({
+        '상품명': currentItem['상품명'],
+        '상품코드': currentItem['상품코드'],
+        '재고수량':0,
+        '실수량':qty,
+        '차이':qty,
+        '소비기한': exp.value
+    });
+
+    barcode.value='';
+    name.innerText='';
+    box.value='';
+    each.value='';
+    exp.value='';
+    currentItem=null;
+}
+
+
+// ===== 공통 기능 =====
 function downloadExcel(){
     fetch('/download',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body: JSON.stringify(data)
     })
-    .then(res=>res.blob())
-    .then(blob=>{
-        let url = URL.createObjectURL(blob);
-        let a = document.createElement('a');
-        a.href = url;
-        a.download = '재고조사결과.xlsx';
+    .then(r=>r.blob())
+    .then(b=>{
+        let a=document.createElement('a');
+        a.href=URL.createObjectURL(b);
+        a.download='result.xlsx';
         a.click();
     });
 }
 
-
-// 공유
 function shareLink(){
     fetch('/generate_link',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body: JSON.stringify(data)
     })
-    .then(res=>res.json())
-    .then(res=>{
-        let url = location.origin + res.link;
+    .then(r=>r.json())
+    .then(r=>{
+        let url=location.origin+r.link;
         navigator.clipboard.writeText(url);
-        alert('링크 복사 완료\n'+url);
+        alert(url);
     });
 }
 
-
-// 시작
 render();
 
 </script>
-
 </body>
 </html>
