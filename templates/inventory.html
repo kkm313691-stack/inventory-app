@@ -47,6 +47,19 @@ input {
     background:#fff3e0;
     border:1px solid #ffcc80;
 }
+
+/* 🔥 버튼 가로 */
+.btn-row {
+    display:flex;
+    gap:8px;
+}
+.btn-row button {
+    flex:1;
+}
+.next-btn {
+    background:#4CAF50;
+    color:white;
+}
 </style>
 </head>
 
@@ -146,9 +159,13 @@ function render(){
 
         <br>
 
-        <button onclick="saveAndNext()">완료</button>
-        <button onclick="prev()">이전</button>
-        <button onclick="same()">동일</button>
+        <!-- 🔥 버튼 가로 UI -->
+        <div class="btn-row">
+            <button onclick="prev()">이전</button>
+            <button onclick="same()">동일</button>
+            <button class="next-btn" onclick="saveAndNext()">다음</button>
+        </div>
+
         <button onclick="toggleAdd()">신규 재고 추가</button>
     </div>
 
@@ -206,7 +223,7 @@ function enterNext(e){
 }
 
 
-// ===== 🔥 신규 추가 (완전 안정 버전) =====
+// ===== 신규 추가 (안정 버전) =====
 function addNew(){
 
     let locEl = document.getElementById('newLoc');
@@ -241,11 +258,6 @@ function addNew(){
     }
 
     alert('추가 완료');
-
-    locEl.value='';
-    nameEl.value='';
-    expEl.value='';
-    qtyEl.value='';
 
     showAdd = false;
     render();
