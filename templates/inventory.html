@@ -40,6 +40,7 @@ input {
     font-size:20px;
     padding:10px;
     margin:6px 0;
+    box-sizing:border-box;
 }
 
 .add-box {
@@ -97,7 +98,7 @@ function render(){
             value="${item['실수량'] ?? ''}"
             inputmode="numeric"
             pattern="[0-9]*"
-            onchange="update(this.value)"
+            placeholder="수량 입력"
             onkeydown="enterNext(event)">
 
         <div class="${diffClass}">
@@ -106,12 +107,12 @@ function render(){
 
         <br>
 
+        <button onclick="saveAndNext()">완료</button>
         <button onclick="prev()">이전</button>
         <button onclick="same()">동일</button>
-        <button onclick="next()">다음</button>
     </div>
 
-    <!-- 🔥 신규 재고 입력 -->
+    <!-- 신규 재고 입력 -->
     <div class="card add-box">
         <b>신규 재고 추가</b><br><br>
 
@@ -138,8 +139,12 @@ function render(){
 }
 
 
-// ===== 기존 업데이트 =====
-function update(v){
+// ===== 저장 + 다음 =====
+function saveAndNext(){
+
+    let input = document.getElementById('qty');
+    let v = input.value;
+
     let item = data[currentIndex];
 
     let real = (v === '') ? null : parseInt(v);
@@ -150,16 +155,15 @@ function update(v){
         ? 0
         : item['실수량'] - item['재고수량'];
 
-    render();
+    next();
 }
 
 
-// ===== 엔터 이동 =====
+// ===== 엔터 처리 =====
 function enterNext(e){
     if(e.key === 'Enter'){
         e.preventDefault();
-        update(e.target.value);
-        next();
+        saveAndNext();
     }
 }
 
@@ -186,7 +190,6 @@ function addNew(){
         '차이': qty
     });
 
-    // 자동검색 목록 업데이트
     if(!productNames.includes(name)){
         productNames.push(name);
         document.getElementById('productList').innerHTML += `<option value="${name}">`;
@@ -212,8 +215,17 @@ function same(){
 
 // ===== 이동 =====
 function next(){
-    if(currentIndex < data.length-1){
+
+    // 🔥 입력 안된 다음 항목으로 이동
+    let nextIndex = data.findIndex((x, i) => i > currentIndex && x['실수량'] == null);
+
+    if(nextIndex !== -1){
+        currentIndex = nextIndex;
+    } else {
         currentIndex++;
+    }
+
+    if(currentIndex < data.length){
         render();
     }
 }
