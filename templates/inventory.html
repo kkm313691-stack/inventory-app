@@ -40,6 +40,7 @@ input {
     font-size:20px;
     padding:10px;
     margin:6px 0;
+    box-sizing:border-box;
 }
 
 .add-box {
@@ -66,25 +67,21 @@ let data = {{ data | tojson }};
 let currentIndex = data.findIndex(x => x['실수량'] == null);
 if(currentIndex < 0) currentIndex = 0;
 
-// 🔥 상품명 리스트
 let productNames = [...new Set(data.map(i => i['상품명']))];
 
 
 // ===== 자동검색 필터 =====
 function filterProducts(keyword){
     let list = document.getElementById('productList');
-
     let filtered = productNames.filter(p =>
         p.toLowerCase().includes(keyword.toLowerCase())
     );
-
     list.innerHTML = filtered.map(p => `<option value="${p}">`).join('');
 }
 
 
 // ===== 신규 입력 토글 =====
 let showAdd = false;
-
 function toggleAdd(){
     showAdd = !showAdd;
     render();
@@ -105,19 +102,18 @@ function render(){
             <b>신규 재고 추가</b><br><br>
 
             로케이션:
-            <input id="newLoc" placeholder="예: A-01">
+            <input id="newLoc">
 
             상품명:
             <input id="newName"
                 list="productList"
-                placeholder="상품 검색"
                 oninput="filterProducts(this.value)">
 
             소비기한:
             <input type="date" id="newExp">
 
             수량:
-            <input id="newQty" type="tel" inputmode="numeric" placeholder="수량">
+            <input id="newQty" type="tel" inputmode="numeric">
 
             <button onclick="addNew()">추가</button>
         </div>
@@ -140,9 +136,10 @@ function render(){
             value="${item['실수량'] ?? ''}"
             inputmode="numeric"
             pattern="[0-9]*"
+            oninput="liveUpdate(this.value)"
             onkeydown="enterNext(event)">
 
-        <div class="${diffClass}">
+        <div id="diff" class="${diffClass}">
             차이: ${item['차이']}
         </div>
 
@@ -164,11 +161,8 @@ function render(){
 }
 
 
-// ===== 저장 + 다음 =====
-function saveAndNext(){
-
-    let input = document.getElementById('qty');
-    let v = input.value;
+// ===== 🔥 실시간 차이 반영 =====
+function liveUpdate(v){
 
     let item = data[currentIndex];
 
@@ -180,6 +174,24 @@ function saveAndNext(){
         ? 0
         : item['실수량'] - item['재고수량'];
 
+    let diffDiv = document.getElementById('diff');
+
+    if(diffDiv){
+        diffDiv.innerText = "차이: " + item['차이'];
+
+        if(item['차이'] != 0){
+            diffDiv.classList.add('diff-red');
+        }else{
+            diffDiv.classList.remove('diff-red');
+        }
+    }
+}
+
+
+// ===== 저장 + 다음 =====
+function saveAndNext(){
+    let input = document.getElementById('qty');
+    liveUpdate(input.value);
     next();
 }
 
