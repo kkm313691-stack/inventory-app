@@ -29,6 +29,7 @@ def natural_sort_key(s):
     return [int(text) if text.isdigit() else text for text in re.split(r'(\d+)', str(s))]
 
 
+# 🔥 컬럼 매핑 (상품코드 제거 핵심)
 def map_columns(df):
     df.columns = df.columns.str.strip()
 
@@ -37,26 +38,37 @@ def map_columns(df):
     for col in df.columns:
         c = col.lower().replace(" ", "")
 
+        # 🔥 상품코드/바코드 제외
         if '코드' in c or '바코드' in c:
             continue
-        elif '상품' in c or '품명' in c:
+
+        elif ('상품' in c or '품명' in c):
             col_map[col] = '상품명'
+
         elif '로케이션' in c or '랙' in c or '위치' in c:
             col_map[col] = '로케이션'
+
         elif '소비' in c or '유통' in c:
             col_map[col] = '소비기한'
+
         elif '재고수량' in c:
             col_map[col] = '재고수량'
+
         elif '실수량' in c:
             col_map[col] = '실수량'
+
         elif '차이' in c:
             col_map[col] = '차이'
+
         elif '입수' in c:
             col_map[col] = '입수'
 
     df = df.rename(columns=col_map)
 
+    # 🔥 중복 컬럼 제거
     df = df.loc[:, ~df.columns.duplicated()]
+
+    # 🔥 인덱스 정리
     df = df.reset_index(drop=True)
 
     required = ['상품명', '로케이션']
@@ -86,28 +98,23 @@ def upload():
         df = pd.read_excel(filepath)
         df = map_columns(df)
 
-        # 재고수량
         if '재고수량' in df.columns:
             df['재고수량'] = pd.to_numeric(clean_number_series(df['재고수량']), errors='coerce').fillna(0)
         else:
             df['재고수량'] = 0
 
-        # 소비기한
         if '소비기한' in df.columns:
             df['소비기한'] = clean_date_series(df['소비기한'])
         else:
             df['소비기한'] = ''
 
-        # 🔥 이어하기 핵심
         if '실수량' in df.columns:
             df['실수량'] = pd.to_numeric(clean_number_series(df['실수량']), errors='coerce')
         else:
             df['실수량'] = None
 
-        # 차이 재계산
         df['차이'] = df['실수량'].fillna(0) - df['재고수량']
 
-        # 정렬
         if '로케이션' in df.columns:
             df = df.sort_values(
                 by='로케이션',
@@ -123,6 +130,7 @@ def upload():
 @app.route('/download', methods=['POST'])
 def download():
     df = pd.DataFrame(request.get_json())
+
     df['차이'] = df['실수량'].fillna(0) - df['재고수량']
 
     output = BytesIO()
