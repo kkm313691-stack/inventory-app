@@ -1,14 +1,13 @@
 from flask import Flask, render_template, request, send_file, jsonify
 import pandas as pd
-import os
 from io import BytesIO
 import re
+import uuid
 
 app = Flask(__name__)
 
-# 🔥 업로드 제한
-app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
-
+# 🔥 공유 데이터 저장 (메모리)
+shared_data_store = {}
 
 # ===== 숫자 정리 =====
 def clean_number_series(series):
@@ -18,20 +17,17 @@ def clean_number_series(series):
         .replace('', None)
     )
 
-
-# ===== 날짜 정리 =====
+# ===== 날짜 =====
 def clean_date_series(series):
     return pd.to_datetime(series, errors='coerce').dt.strftime('%Y-%m-%d')
 
-
-# ===== 자연 정렬 =====
+# ===== 정렬 =====
 def natural_sort_key(s):
     if pd.isna(s):
         return []
     return [int(text) if text.isdigit() else text for text in re.split(r'(\d+)', str(s))]
 
-
-# ===== 컬럼 매핑 =====
+# ===== 컬럼 =====
 def map_columns(df):
     df.columns = df.columns.str.strip()
     col_map = {}
@@ -51,69 +47,42 @@ def map_columns(df):
             col_map[col] = '재고수량'
 
     df = df.rename(columns=col_map)
-    df = df.loc[:, ~df.columns.duplicated()]
     df = df.reset_index(drop=True)
 
     if '상품명' not in df.columns or '로케이션' not in df.columns:
-        raise Exception("상품명 / 로케이션 컬럼 필수")
+        raise Exception("상품명 / 로케이션 필수")
 
     return df
-
 
 # ===== 메인 =====
 @app.route('/')
 def index():
     return render_template('upload.html')
 
-
 # ===== 업로드 =====
 @app.route('/upload', methods=['POST'])
 def upload():
-    try:
-        file = request.files.get('file')
+    file = request.files['file']
+    df = pd.read_excel(file, dtype=str)
 
-        if not file:
-            return "파일 없음"
+    df = map_columns(df)
 
-        df = pd.read_excel(file, engine='openpyxl', dtype=str)
+    df = df[['상품명','로케이션','소비기한','재고수량']]
 
-        df = map_columns(df)
+    if len(df) > 2000:
+        df = df.head(2000)
 
-        for col in ['상품명','로케이션','소비기한','재고수량']:
-            if col not in df.columns:
-                df[col] = ''
+    df['재고수량'] = pd.to_numeric(clean_number_series(df['재고수량']), errors='coerce').fillna(0)
+    df['소비기한'] = clean_date_series(df['소비기한'])
 
-        df = df[['상품명','로케이션','소비기한','재고수량']]
+    df['실수량'] = None
+    df['차이'] = 0
 
-        # 🔥 모바일 안정화
-        if len(df) > 2000:
-            df = df.head(2000)
+    data = df.to_dict(orient='records')
 
-        df['재고수량'] = pd.to_numeric(
-            clean_number_series(df['재고수량']),
-            errors='coerce'
-        ).fillna(0)
+    return render_template('inventory.html', data=data)
 
-        df['소비기한'] = clean_date_series(df['소비기한'])
-
-        df['실수량'] = None
-        df['차이'] = 0
-
-        df = df.sort_values(
-            by='로케이션',
-            key=lambda col: col.map(natural_sort_key)
-        )
-
-        data = df.where(pd.notnull(df), None).to_dict(orient='records')
-
-        return render_template('inventory.html', data=data)
-
-    except Exception as e:
-        print("🔥 ERROR:", str(e))
-        return f"업로드 오류: {str(e)}"
-
-
-# ===== 다운로드 (🔥 핵심: 메모리 다운로드) =====
+# ===== 다운로드 =====
 @app.route('/download', methods=['POST'])
 def download():
     df = pd.DataFrame(request.get_json())
@@ -124,18 +93,28 @@ def download():
     df.to_excel(output, index=False)
     output.seek(0)
 
-    return send_file(
-        output,
-        as_attachment=True,
-        download_name="재고조사결과.xlsx"
-    )
+    return send_file(output, as_attachment=True, download_name="재고조사결과.xlsx")
 
-
-# ===== 공유 버튼 비활성 =====
+# ===== 🔥 공유 생성 =====
 @app.route('/generate_link', methods=['POST'])
 def generate_link():
-    return jsonify({"msg": "공유 기능은 지원되지 않습니다. 다운로드를 사용하세요."})
+    data = request.get_json()
+
+    key = str(uuid.uuid4())
+    shared_data_store[key] = data
+
+    return jsonify({"link": f"/share/{key}"})
+
+# ===== 🔥 공유 접속 =====
+@app.route('/share/<key>')
+def load_shared(key):
+    data = shared_data_store.get(key)
+
+    if not data:
+        return "공유 데이터가 만료되었습니다."
+
+    return render_template('inventory.html', data=data)
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run()
