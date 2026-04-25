@@ -2,15 +2,16 @@ from flask import Flask, render_template, request, send_file, jsonify
 import pandas as pd
 from io import BytesIO
 import uuid
+import time
 
 app = Flask(__name__)
 
-# 🔥 메모리 저장소 (엑셀 파일 보관)
+# 🔥 메모리 저장소
 shared_store = {}
 
 
 # =========================
-# 🔥 업로드 페이지
+# 업로드 페이지
 # =========================
 @app.route('/')
 def index():
@@ -18,7 +19,7 @@ def index():
 
 
 # =========================
-# 🔥 업로드 처리
+# 업로드 처리
 # =========================
 @app.route('/upload', methods=['POST'])
 def upload():
@@ -30,15 +31,13 @@ def upload():
 
     df = pd.read_excel(file, engine='openpyxl', dtype=str)
 
-    # 기본 컬럼 정리
     df.columns = df.columns.str.strip()
 
-    # 필요한 컬럼만 사용 (없으면 생성)
-    for col in ['상품명', '로케이션', '소비기한', '재고수량']:
+    for col in ['상품명','로케이션','소비기한','재고수량']:
         if col not in df.columns:
             df[col] = ''
 
-    df = df[['상품명', '로케이션', '소비기한', '재고수량']]
+    df = df[['상품명','로케이션','소비기한','재고수량']]
 
     df['재고수량'] = pd.to_numeric(df['재고수량'], errors='coerce').fillna(0)
 
@@ -51,7 +50,7 @@ def upload():
 
 
 # =========================
-# 🔥 엑셀 다운로드 (일반)
+# 일반 다운로드
 # =========================
 @app.route('/download', methods=['POST'])
 def download():
@@ -71,66 +70,108 @@ def download():
     )
 
 
-# =========================
-# 🔥 공유 생성 (엑셀 생성 + 메모리 저장)
-# =========================
+# =====================================================
+# 🔥 공유 생성 (링크 생성)
+# =====================================================
 @app.route('/generate_link', methods=['POST'])
 def generate_link():
 
     data = request.get_json()
 
-    df = pd.DataFrame(data)
-
-    # 🔥 차이 계산
-    if '실수량' in df.columns:
-        df['실수량'] = pd.to_numeric(df['실수량'], errors='coerce').fillna(0)
-    else:
-        df['실수량'] = 0
-
-    if '재고수량' in df.columns:
-        df['재고수량'] = pd.to_numeric(df['재고수량'], errors='coerce').fillna(0)
-    else:
-        df['재고수량'] = 0
-
-    df['차이'] = df['실수량'] - df['재고수량']
-
-    # 🔥 엑셀 메모리 생성
-    output = BytesIO()
-    df.to_excel(output, index=False)
-    output.seek(0)
-
     key = str(uuid.uuid4())
 
-    shared_store[key] = output
+    shared_store[key] = {
+        "data": data,
+        "time": time.time()
+    }
 
     return jsonify({
         "link": f"/share/{key}"
     })
 
 
-# =========================
-# 🔥 공유 다운로드 링크
-# =========================
+# =====================================================
+# 🔥 공유 페이지 (다운로드 버튼 페이지)
+# =====================================================
 @app.route('/share/<key>')
-def share(key):
+def share_page(key):
 
-    file = shared_store.get(key)
+    if key not in shared_store:
+        return "공유 데이터가 없습니다."
 
-    if not file:
-        return "공유 데이터가 존재하지 않습니다."
+    return f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>재고조사 다운로드</title>
+        <style>
+            body {{
+                font-family: Arial;
+                text-align: center;
+                padding: 50px;
+            }}
+            button {{
+                font-size: 20px;
+                padding: 15px;
+                width: 80%;
+                background: #4CAF50;
+                color: white;
+                border: none;
+                border-radius: 10px;
+            }}
+        </style>
+    </head>
+    <body>
 
-    file.seek(0)
+        <h2>재고조사 파일 다운로드</h2>
+
+        <p>아래 버튼을 눌러 엑셀 파일을 다운로드하세요</p>
+
+        <button onclick="location.href='/download_file/{key}'">
+            엑셀 다운로드
+        </button>
+
+        <script>
+            // 🔥 자동 다운로드 (모바일 대응)
+            setTimeout(()=>{
+                window.location.href = "/download_file/{key}";
+            }, 800);
+        </script>
+
+    </body>
+    </html>
+    """
+
+
+# =====================================================
+# 🔥 실제 파일 다운로드
+# =====================================================
+@app.route('/download_file/<key>')
+def download_file(key):
+
+    item = shared_store.get(key)
+
+    if not item:
+        return "파일이 존재하지 않습니다."
+
+    df = pd.DataFrame(item["data"])
+
+    df['차이'] = pd.to_numeric(df['실수량'], errors='coerce').fillna(0) - df['재고수량']
+
+    output = BytesIO()
+    df.to_excel(output, index=False)
+    output.seek(0)
 
     return send_file(
-        file,
+        output,
         as_attachment=True,
-        download_name="재고조사공유.xlsx",
-        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        download_name="재고조사.xlsx"
     )
 
 
 # =========================
-# 🔥 실행
+# 실행
 # =========================
 if __name__ == '__main__':
     app.run()
