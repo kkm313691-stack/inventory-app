@@ -48,7 +48,7 @@ input {
     border:1px solid #ffcc80;
 }
 
-/* 🔥 버튼 가로 */
+/* 버튼 가로 */
 .btn-row {
     display:flex;
     gap:8px;
@@ -103,6 +103,31 @@ function toggleAdd(){
 }
 
 
+// ===== 🔥 날짜 자동 포맷 =====
+function formatDateInput(el){
+
+    let v = el.value.replace(/[^0-9]/g, '');
+
+    if(v.length > 8) v = v.slice(0,8);
+
+    if(v.length >= 5){
+        el.value = v.slice(0,4) + '-' + v.slice(4,6) + '-' + v.slice(6);
+    }
+    else if(v.length >= 3){
+        el.value = v.slice(0,4) + '-' + v.slice(4);
+    }
+    else{
+        el.value = v;
+    }
+}
+
+
+// ===== 날짜 검증 =====
+function isValidDate(dateStr){
+    return /^\d{4}-\d{2}-\d{2}$/.test(dateStr);
+}
+
+
 // ===== 렌더 =====
 function render(){
 
@@ -125,7 +150,11 @@ function render(){
                 oninput="filterProducts(this.value)">
 
             소비기한:
-            <input type="date" id="newExp">
+            <input id="newExp"
+                type="text"
+                inputmode="numeric"
+                placeholder="YYYY-MM-DD"
+                oninput="formatDateInput(this)">
 
             수량:
             <input id="newQty" type="tel" inputmode="numeric">
@@ -159,7 +188,6 @@ function render(){
 
         <br>
 
-        <!-- 🔥 버튼 가로 UI -->
         <div class="btn-row">
             <button onclick="prev()">이전</button>
             <button onclick="same()">동일</button>
@@ -223,25 +251,20 @@ function enterNext(e){
 }
 
 
-// ===== 신규 추가 (안정 버전) =====
+// ===== 신규 추가 =====
 function addNew(){
 
-    let locEl = document.getElementById('newLoc');
-    let nameEl = document.getElementById('newName');
-    let expEl = document.getElementById('newExp');
-    let qtyEl = document.getElementById('newQty');
-
-    if(!locEl || !nameEl || !expEl || !qtyEl){
-        return alert('입력창이 열려있지 않습니다');
-    }
-
-    let loc = locEl.value.trim();
-    let name = nameEl.value.trim();
-    let exp = expEl.value;
-    let qty = parseInt(qtyEl.value) || 0;
+    let loc = document.getElementById('newLoc').value.trim();
+    let name = document.getElementById('newName').value.trim();
+    let exp = document.getElementById('newExp').value;
+    let qty = parseInt(document.getElementById('newQty').value) || 0;
 
     if(!loc || !name || !exp){
         return alert('로케이션 / 상품명 / 소비기한 입력 필요');
+    }
+
+    if(!isValidDate(exp)){
+        return alert('소비기한 형식: YYYY-MM-DD');
     }
 
     data.push({
@@ -275,7 +298,6 @@ function same(){
 
 // ===== 이동 =====
 function next(){
-
     let nextIndex = data.findIndex((x, i) => i > currentIndex && x['실수량'] == null);
 
     if(nextIndex !== -1){
@@ -328,7 +350,6 @@ function shareLink(){
         alert("링크 복사됨:\n"+url);
     });
 }
-
 
 render();
 
