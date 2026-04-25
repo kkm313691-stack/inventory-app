@@ -8,78 +8,19 @@ import re
 app = Flask(__name__)
 app.secret_key = 'ourbox-secret-key'
 
-# 🔥 파일 업로드 제한 (10MB)
+# 🔥 업로드 제한 (10MB)
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
 
 UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-
-# ===== 숫자 정리 =====
-def clean_number_series(series):
-    return (
-        series.astype(str)
-        .str.replace(r'[^0-9.-]', '', regex=True)
-        .replace('', None)
-    )
-
-
-# ===== 날짜 정리 =====
-def clean_date_series(series):
-    return pd.to_datetime(series, errors='coerce').dt.strftime('%Y-%m-%d')
-
-
-# ===== 자연 정렬 =====
-def natural_sort_key(s):
-    if pd.isna(s):
-        return []
-    return [int(text) if text.isdigit() else text for text in re.split(r'(\d+)', str(s))]
-
-
-# ===== 컬럼 매핑 =====
-def map_columns(df):
-    df.columns = df.columns.str.strip()
-
-    col_map = {}
-
-    for col in df.columns:
-        c = col.lower().replace(" ", "")
-
-        if '코드' in c or '바코드' in c:
-            continue
-        elif ('상품' in c or '품명' in c):
-            col_map[col] = '상품명'
-        elif '로케이션' in c or '랙' in c or '위치' in c:
-            col_map[col] = '로케이션'
-        elif '소비' in c or '유통' in c:
-            col_map[col] = '소비기한'
-        elif '재고수량' in c:
-            col_map[col] = '재고수량'
-        elif '실수량' in c:
-            col_map[col] = '실수량'
-        elif '차이' in c:
-            col_map[col] = '차이'
-
-    df = df.rename(columns=col_map)
-
-    # 중복 제거
-    df = df.loc[:, ~df.columns.duplicated()]
-    df = df.reset_index(drop=True)
-
-    # 필수 체크
-    for r in ['상품명', '로케이션']:
-        if r not in df.columns:
-            raise Exception(f"필수 컬럼 없음: {r}")
-
-    return df
-
-
-# ===== 로그인 =====
+# ===== 계정 =====
 USERS = {
     "admin": "1234",
     "staff": "1111"
 }
 
+# ===== 로그인 체크 =====
 def login_required(func):
     def wrapper(*args, **kwargs):
         if not session.get('user'):
@@ -88,7 +29,7 @@ def login_required(func):
     wrapper.__name__ = func.__name__
     return wrapper
 
-
+# ===== 로그인 =====
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -103,12 +44,57 @@ def login():
 
     return render_template('login.html')
 
-
+# ===== 로그아웃 =====
 @app.route('/logout')
 def logout():
     session.clear()
     return redirect('/login')
 
+# ===== 숫자 정리 =====
+def clean_number_series(series):
+    return (
+        series.astype(str)
+        .str.replace(r'[^0-9.-]', '', regex=True)
+        .replace('', None)
+    )
+
+# ===== 날짜 정리 =====
+def clean_date_series(series):
+    return pd.to_datetime(series, errors='coerce').dt.strftime('%Y-%m-%d')
+
+# ===== 자연 정렬 =====
+def natural_sort_key(s):
+    if pd.isna(s):
+        return []
+    return [int(text) if text.isdigit() else text for text in re.split(r'(\d+)', str(s))]
+
+# ===== 컬럼 매핑 =====
+def map_columns(df):
+    df.columns = df.columns.str.strip()
+    col_map = {}
+
+    for col in df.columns:
+        c = col.lower().replace(" ", "")
+
+        if '코드' in c or '바코드' in c:
+            continue
+        elif ('상품' in c or '품명' in c):
+            col_map[col] = '상품명'
+        elif '로케이션' in c or '랙' in c or '위치' in c:
+            col_map[col] = '로케이션'
+        elif '소비' in c or '유통' in c:
+            col_map[col] = '소비기한'
+        elif '재고' in c:
+            col_map[col] = '재고수량'
+
+    df = df.rename(columns=col_map)
+    df = df.loc[:, ~df.columns.duplicated()]
+    df = df.reset_index(drop=True)
+
+    if '상품명' not in df.columns or '로케이션' not in df.columns:
+        raise Exception("상품명 / 로케이션 컬럼 필수")
+
+    return df
 
 # ===== 메인 =====
 @app.route('/')
@@ -116,34 +102,36 @@ def logout():
 def index():
     return render_template('upload.html')
 
-
-# ===== 업로드 (🔥 최적화 핵심) =====
+# ===== 업로드 (🔥 안정화 핵심) =====
 @app.route('/upload', methods=['POST'])
 @login_required
 def upload():
     try:
         file = request.files.get('file')
+
         if not file:
             return "파일 없음"
 
         filepath = os.path.join(UPLOAD_FOLDER, file.filename)
         file.save(filepath)
 
-        # 🔥 1. 엑셀 최적화 (엔진 + 필요한 컬럼만)
-        df = pd.read_excel(
-            filepath,
-            engine='openpyxl'
-        )
+        # 🔥 빠른 읽기
+        df = pd.read_excel(filepath, engine='openpyxl', dtype=str)
 
+        # 🔥 컬럼 정리
         df = map_columns(df)
 
-        # 🔥 2. 컬럼 최소화 (데이터 경량화)
-        keep_cols = ['상품명', '로케이션', '소비기한', '재고수량', '실수량']
-        for col in keep_cols:
+        # 🔥 필수 컬럼 생성
+        for col in ['상품명','로케이션','소비기한','재고수량']:
             if col not in df.columns:
-                df[col] = None
+                df[col] = ''
 
-        df = df[keep_cols]
+        # 🔥 컬럼 최소화
+        df = df[['상품명','로케이션','소비기한','재고수량']]
+
+        # 🔥 데이터 제한 (안정성 핵심)
+        if len(df) > 5000:
+            df = df.head(5000)
 
         # 🔥 숫자 처리
         df['재고수량'] = pd.to_numeric(
@@ -154,14 +142,9 @@ def upload():
         # 🔥 날짜 처리
         df['소비기한'] = clean_date_series(df['소비기한'])
 
-        # 🔥 실수량
-        df['실수량'] = pd.to_numeric(
-            clean_number_series(df['실수량']),
-            errors='coerce'
-        )
-
-        # 🔥 차이 계산
-        df['차이'] = df['실수량'].fillna(0) - df['재고수량']
+        # 🔥 기본 컬럼
+        df['실수량'] = None
+        df['차이'] = 0
 
         # 🔥 정렬
         df = df.sort_values(
@@ -169,14 +152,14 @@ def upload():
             key=lambda col: col.map(natural_sort_key)
         )
 
-        # 🔥 JSON 경량화 (NaN 제거)
+        # 🔥 JSON 안정화 (NaN 제거)
         data = df.where(pd.notnull(df), None).to_dict(orient='records')
 
         return render_template('inventory.html', data=data)
 
     except Exception as e:
-        return f"오류: {str(e)}"
-
+        print("🔥 ERROR:", str(e))
+        return f"업로드 오류: {str(e)}"
 
 # ===== 다운로드 =====
 @app.route('/download', methods=['POST'])
@@ -192,7 +175,6 @@ def download():
 
     return send_file(output, as_attachment=True, download_name="재고조사결과.xlsx")
 
-
 # ===== 링크 생성 =====
 @app.route('/generate_link', methods=['POST'])
 @login_required
@@ -206,12 +188,10 @@ def generate_link():
 
     return jsonify({"link": f"/file/{filename}"})
 
-
 @app.route('/file/<filename>')
 @login_required
 def file_download(filename):
     return send_file(os.path.join(UPLOAD_FOLDER, filename), as_attachment=True)
-
 
 if __name__ == '__main__':
     app.run(debug=True)
