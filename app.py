@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, send_file, jsonify, redirect, url_for, session
+from flask import Flask, render_template, request, send_file, jsonify
 import pandas as pd
 import os
 from io import BytesIO
@@ -6,7 +6,6 @@ from datetime import datetime
 import re
 
 app = Flask(__name__)
-app.secret_key = 'ourbox-secret-key'
 
 # 🔥 업로드 제한 (10MB)
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
@@ -14,41 +13,6 @@ app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
 UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# ===== 계정 =====
-USERS = {
-    "admin": "1234",
-    "staff": "1111"
-}
-
-# ===== 로그인 체크 =====
-def login_required(func):
-    def wrapper(*args, **kwargs):
-        if not session.get('user'):
-            return redirect(url_for('login'))
-        return func(*args, **kwargs)
-    wrapper.__name__ = func.__name__
-    return wrapper
-
-# ===== 로그인 =====
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        user = request.form.get('username')
-        pw = request.form.get('password')
-
-        if USERS.get(user) == pw:
-            session['user'] = user
-            return redirect('/')
-        else:
-            return "로그인 실패"
-
-    return render_template('login.html')
-
-# ===== 로그아웃 =====
-@app.route('/logout')
-def logout():
-    session.clear()
-    return redirect('/login')
 
 # ===== 숫자 정리 =====
 def clean_number_series(series):
@@ -58,15 +22,18 @@ def clean_number_series(series):
         .replace('', None)
     )
 
+
 # ===== 날짜 정리 =====
 def clean_date_series(series):
     return pd.to_datetime(series, errors='coerce').dt.strftime('%Y-%m-%d')
+
 
 # ===== 자연 정렬 =====
 def natural_sort_key(s):
     if pd.isna(s):
         return []
     return [int(text) if text.isdigit() else text for text in re.split(r'(\d+)', str(s))]
+
 
 # ===== 컬럼 매핑 =====
 def map_columns(df):
@@ -96,15 +63,15 @@ def map_columns(df):
 
     return df
 
+
 # ===== 메인 =====
 @app.route('/')
-@login_required
 def index():
     return render_template('upload.html')
 
-# ===== 업로드 (🔥 안정화 핵심) =====
+
+# ===== 업로드 =====
 @app.route('/upload', methods=['POST'])
-@login_required
 def upload():
     try:
         file = request.files.get('file')
@@ -129,7 +96,7 @@ def upload():
         # 🔥 컬럼 최소화
         df = df[['상품명','로케이션','소비기한','재고수량']]
 
-        # 🔥 데이터 제한 (안정성 핵심)
+        # 🔥 데이터 제한
         if len(df) > 5000:
             df = df.head(5000)
 
@@ -152,7 +119,7 @@ def upload():
             key=lambda col: col.map(natural_sort_key)
         )
 
-        # 🔥 JSON 안정화 (NaN 제거)
+        # 🔥 JSON 안정화
         data = df.where(pd.notnull(df), None).to_dict(orient='records')
 
         return render_template('inventory.html', data=data)
@@ -161,9 +128,9 @@ def upload():
         print("🔥 ERROR:", str(e))
         return f"업로드 오류: {str(e)}"
 
+
 # ===== 다운로드 =====
 @app.route('/download', methods=['POST'])
-@login_required
 def download():
     df = pd.DataFrame(request.get_json())
 
@@ -175,9 +142,9 @@ def download():
 
     return send_file(output, as_attachment=True, download_name="재고조사결과.xlsx")
 
+
 # ===== 링크 생성 =====
 @app.route('/generate_link', methods=['POST'])
-@login_required
 def generate_link():
     df = pd.DataFrame(request.get_json())
 
@@ -188,10 +155,12 @@ def generate_link():
 
     return jsonify({"link": f"/file/{filename}"})
 
+
+# ===== 파일 다운로드 =====
 @app.route('/file/<filename>')
-@login_required
 def file_download(filename):
     return send_file(os.path.join(UPLOAD_FOLDER, filename), as_attachment=True)
+
 
 if __name__ == '__main__':
     app.run(debug=True)
