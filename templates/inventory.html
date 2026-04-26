@@ -40,7 +40,7 @@ button {
 <input type="checkbox" id="autoMode"> 스캔만으로 +1
 </label>
 
-<button onclick="downloadExcel()">엑셀 다운로드</button>
+<button onclick="showMissing()">미입력 보기</button>
 
 <div id="list"></div>
 
@@ -52,7 +52,7 @@ let currentItem = null;
 
 // ===== 서버 동기화 =====
 function syncServer(){
-    fetch('/sync', {
+    fetch('/sync',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body: JSON.stringify(data)
@@ -60,7 +60,7 @@ function syncServer(){
 }
 
 
-// ===== 바코드 스캔 =====
+// ===== 스캔 =====
 document.getElementById('barcodeInput')
 .addEventListener('keypress', function(e){
     if(e.key === 'Enter'){
@@ -81,8 +81,7 @@ function scan(code){
     let auto = document.getElementById('autoMode').checked;
 
     if(auto){
-        let current = parseInt(item['실수량']) || 0;
-        item['실수량'] = current + 1;
+        item['실수량'] += 1;
         item['차이'] = item['실수량'] - item['재고수량'];
         syncServer();
         return;
@@ -95,11 +94,6 @@ function scan(code){
 
 // ===== 렌더 =====
 function render(){
-
-    if(!currentItem){
-        document.getElementById('list').innerHTML = '';
-        return;
-    }
 
     document.getElementById('list').innerHTML = `
     <div class="card">
@@ -135,11 +129,11 @@ function save(){
     let box = parseInt(document.getElementById('boxQty').value) || 0;
     let each = parseInt(document.getElementById('eachQty').value) || 0;
 
-    let prev = parseInt(currentItem['실수량']) || 0;
-    let total = prev + box + each;
+    currentItem['박스수'] += box;
+    currentItem['낱개수량'] += each;
 
-    currentItem['실수량'] = total;
-    currentItem['차이'] = total - currentItem['재고수량'];
+    currentItem['실수량'] += (box + each);
+    currentItem['차이'] = currentItem['실수량'] - currentItem['재고수량'];
 
     syncServer();
 
@@ -152,20 +146,19 @@ function save(){
 }
 
 
-// ===== 다운로드 =====
-function downloadExcel(){
-    fetch('/download',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify(data)
-    })
-    .then(r=>r.blob())
-    .then(b=>{
-        let a=document.createElement('a');
-        a.href=URL.createObjectURL(b);
-        a.download='재고조사.xlsx';
-        a.click();
-    });
+// ===== 미입력 보기 =====
+function showMissing(){
+
+    let missing = data.filter(x => x['실수량'] === 0);
+
+    if(missing.length === 0){
+        alert("모두 입력 완료");
+        return;
+    }
+
+    let list = missing.map(x => x['상품명']).join("\\n");
+
+    alert("미입력:\\n" + list);
 }
 
 </script>
