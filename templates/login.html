@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<style>
+body {
+    font-family: Arial;
+    padding:20px;
+    background:#f5f5f5;
+    text-align:center;
+}
+
+.container {
+    max-width:400px;
+    margin:auto;
+    background:white;
+    padding:30px;
+    border-radius:12px;
+}
+
+h2 { margin-bottom:20px; }
+
+button, input {
+    width:100%;
+    padding:16px;
+    margin:8px 0;
+    font-size:18px;
+    border-radius:8px;
+}
+
+.role-btn {
+    background:#eee;
+}
+
+.active {
+    background:#4CAF50;
+    color:white;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h2>🔐 로그인</h2>
+
+<button id="workerBtn" class="role-btn active" onclick="setRole('worker')">재고조사</button>
+<button id="adminBtn" class="role-btn" onclick="setRole('admin')">관리자</button>
+
+<form method="post">
+
+<input type="hidden" name="role" id="role" value="worker">
+
+<input name="id" placeholder="ID">
+<input name="pw" type="password" placeholder="PASSWORD">
+
+<button type="submit">로그인</button>
+
+</form>
+
+</div>
+
+<script>
+
+function setRole(r){
+    document.getElementById('role').value = r;
+
+    document.getElementById('workerBtn').classList.remove('active');
+    document.getElementById('adminBtn').classList.remove('active');
+
+    if(r === 'worker'){
+        document.getElementById('workerBtn').classList.add('active');
+    } else {
+        document.getElementById('adminBtn').classList.add('active');
+    }
+}
+
+</script>
+
+</body>
+</html>
