@@ -3,7 +3,6 @@ import pandas as pd
 from io import BytesIO
 import uuid
 import time
-import re
 
 app = Flask(__name__)
 app.secret_key = "ourbox-secret-key"
@@ -72,14 +71,17 @@ def upload():
     df = pd.read_excel(file, engine="openpyxl", dtype=str)
     df.columns = df.columns.str.strip()
 
-    for col in ["상품명", "로케이션", "소비기한", "재고수량", "바코드"]:
+    # 필수 + 선택 컬럼 처리
+    for col in ["상품명", "재고수량", "바코드", "로케이션", "소비기한"]:
         if col not in df.columns:
             df[col] = ""
 
+    # 필수 먼저, 선택 뒤
     df = df[["상품명", "재고수량", "바코드", "로케이션", "소비기한"]]
 
     df["재고수량"] = pd.to_numeric(df["재고수량"], errors="coerce").fillna(0)
 
+    # 작업 필드
     df["박스수"] = ""
     df["낱개수량"] = ""
     df["실수량"] = ""
@@ -127,7 +129,6 @@ def generate_link():
 
 @app.route("/share/<key>")
 def share(key):
-
     item = shared_store.get(key)
 
     if not item:
