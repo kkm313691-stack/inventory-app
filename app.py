@@ -76,7 +76,7 @@ def upload():
         if col not in df.columns:
             df[col] = ""
 
-    df = df[["상품명", "로케이션", "소비기한", "재고수량", "바코드"]]
+    df = df[["상품명", "재고수량", "바코드", "로케이션", "소비기한"]]
 
     df["재고수량"] = pd.to_numeric(df["재고수량"], errors="coerce").fillna(0)
 
