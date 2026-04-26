@@ -6,28 +6,28 @@
 <style>
 body { font-size:18px; padding:10px; background:#f5f5f5; }
 .card { background:#fff; padding:20px; border-radius:10px; margin:10px 0; }
-input { width:100%; font-size:20px; padding:10px; margin:5px 0; }
+input { width:100%; font-size:22px; padding:12px; margin:6px 0; }
 button { width:100%; padding:14px; margin:5px 0; font-size:18px; }
-.next-btn { background:#4CAF50; color:white; }
-.btn-row { display:flex; gap:8px; }
-.btn-row button { flex:1; }
+.info { font-size:16px; color:#666; margin-bottom:10px; }
 </style>
 </head>
 
 <body>
 
-<h2>재고조사</h2>
+<h2>📦 재고조사</h2>
 
 <input id="barcodeInput" placeholder="📷 바코드 스캔" autofocus>
 
-<button onclick="downloadExcel()">다운로드</button>
+<div class="info">스캔 → 입력 → Enter 반복</div>
+
+<button onclick="downloadExcel()">엑셀 다운로드</button>
 
 <div id="list"></div>
 
 <script>
 
 let data = {{ data | tojson }};
-let currentIndex = 0;
+let currentItem = null;
 
 
 // ===== 바코드 스캔 =====
@@ -41,14 +41,14 @@ document.getElementById('barcodeInput')
 
 function searchBarcode(code){
 
-    let index = data.findIndex(x => String(x['바코드']) === code);
+    let item = data.find(x => String(x['바코드']) === code);
 
-    if(index === -1){
-        alert("상품 없음");
+    if(!item){
+        alert("❌ 상품 없음");
         return;
     }
 
-    currentIndex = index;
+    currentItem = item;
     render();
 }
 
@@ -56,35 +56,32 @@ function searchBarcode(code){
 // ===== 렌더 =====
 function render(){
 
-    let item = data[currentIndex];
+    if(!currentItem){
+        document.getElementById('list').innerHTML = '';
+        return;
+    }
 
     document.getElementById('list').innerHTML = `
     <div class="card">
-        ${currentIndex+1} / ${data.length}<br><br>
 
-        ${item['로케이션'] ? `로케이션: ${item['로케이션']}<br>` : ''}
-        상품명: ${item['상품명']}<br>
-        ${item['소비기한'] ? `소비기한: ${item['소비기한']}<br>` : ''}
-
-        <br>
-
-        재고수량: ${item['재고수량']}<br><br>
-
-        박스수:
-        <input id="boxQty" type="tel" value="${item['박스수'] || ''}">
-
-        낱개수량:
-        <input id="eachQty" type="tel" value="${item['낱개수량'] || ''}">
+        ${currentItem['로케이션'] ? `📍 ${currentItem['로케이션']}<br>` : ''}
+        <h3>${currentItem['상품명']}</h3>
+        ${currentItem['소비기한'] ? `⏰ ${currentItem['소비기한']}<br>` : ''}
 
         <br>
 
-        <div>차이: ${item['차이']}</div>
+        재고수량: ${currentItem['재고수량']}<br><br>
 
-        <div class="btn-row">
-            <button onclick="prev()">이전</button>
-            <button onclick="same()">동일</button>
-            <button class="next-btn" onclick="saveAndNext()">다음</button>
-        </div>
+        📦 박스수:
+        <input id="boxQty" type="tel">
+
+        📦 낱개수량:
+        <input id="eachQty" type="tel" onkeydown="handleEnter(event)">
+
+        <br>
+
+        <div id="result"></div>
+
     </div>
     `;
 
@@ -94,47 +91,37 @@ function render(){
 }
 
 
+// ===== Enter 자동 저장 =====
+function handleEnter(e){
+    if(e.key === 'Enter'){
+        saveValues();
+    }
+}
+
+
 // ===== 저장 =====
 function saveValues(){
-
-    let item = data[currentIndex];
 
     let box = parseInt(document.getElementById('boxQty').value) || 0;
     let each = parseInt(document.getElementById('eachQty').value) || 0;
 
-    item['박스수'] = box;
-    item['낱개수량'] = each;
+    currentItem['박스수'] = box;
+    currentItem['낱개수량'] = each;
 
     let total = box + each;
 
-    item['실수량'] = total;
-    item['차이'] = total - item['재고수량'];
-}
+    currentItem['실수량'] = total;
+    currentItem['차이'] = total - currentItem['재고수량'];
 
+    document.getElementById('result').innerHTML =
+        `✔ 저장됨 (차이: ${currentItem['차이']})`;
 
-// ===== 이동 =====
-function saveAndNext(){
-    saveValues();
-    currentIndex++;
-    if(currentIndex < data.length){
-        render();
-    }
-}
+    // 입력 초기화
+    document.getElementById('boxQty').value = '';
+    document.getElementById('eachQty').value = '';
 
-function prev(){
-    if(currentIndex > 0){
-        currentIndex--;
-        render();
-    }
-}
-
-function same(){
-    let item = data[currentIndex];
-    item['박스수'] = item['재고수량'];
-    item['낱개수량'] = 0;
-    item['실수량'] = item['재고수량'];
-    item['차이'] = 0;
-    saveAndNext();
+    // 👉 다시 스캔 대기
+    document.getElementById('barcodeInput').focus();
 }
 
 
@@ -153,8 +140,6 @@ function downloadExcel(){
         a.click();
     });
 }
-
-render();
 
 </script>
 
