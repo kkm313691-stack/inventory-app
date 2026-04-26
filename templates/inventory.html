@@ -9,6 +9,7 @@ body { font-size:18px; padding:10px; background:#f5f5f5; }
 input { width:100%; font-size:22px; padding:12px; margin:6px 0; }
 button { width:100%; padding:14px; margin:5px 0; font-size:18px; }
 .info { font-size:16px; color:#666; margin-bottom:10px; }
+.toggle { margin:10px 0; }
 </style>
 </head>
 
@@ -18,11 +19,20 @@ button { width:100%; padding:14px; margin:5px 0; font-size:18px; }
 
 <input id="barcodeInput" placeholder="📷 바코드 스캔" autofocus>
 
-<div class="info">스캔 → 입력 → Enter 반복</div>
+<div class="toggle">
+<label>
+<input type="checkbox" id="autoMode">
+ 스캔만으로 +1 자동 증가
+</label>
+</div>
 
+<button onclick="showMissing()">미입력 보기</button>
 <button onclick="downloadExcel()">엑셀 다운로드</button>
 
 <div id="list"></div>
+
+<audio id="beep" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg"></audio>
+<audio id="error" src="https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg"></audio>
 
 <script>
 
@@ -30,24 +40,47 @@ let data = {{ data | tojson }};
 let currentItem = null;
 
 
+// ===== 사운드 =====
+function playBeep(){
+    document.getElementById('beep').play();
+}
+function playError(){
+    document.getElementById('error').play();
+}
+
+
 // ===== 바코드 스캔 =====
 document.getElementById('barcodeInput')
 .addEventListener('keypress', function(e){
     if(e.key === 'Enter'){
-        searchBarcode(e.target.value.trim());
+        scan(e.target.value.trim());
         e.target.value = '';
     }
 });
 
-function searchBarcode(code){
+function scan(code){
 
     let item = data.find(x => String(x['바코드']) === code);
 
     if(!item){
         alert("❌ 상품 없음");
+        playError();
         return;
     }
 
+    playBeep();
+
+    let auto = document.getElementById('autoMode').checked;
+
+    // 🔥 자동모드 (스캔만)
+    if(auto){
+        let current = parseInt(item['실수량']) || 0;
+        item['실수량'] = current + 1;
+        item['차이'] = item['실수량'] - item['재고수량'];
+        return;
+    }
+
+    // 🔥 일반 모드
     currentItem = item;
     render();
 }
@@ -91,7 +124,7 @@ function render(){
 }
 
 
-// ===== Enter 자동 저장 =====
+// ===== Enter 저장 =====
 function handleEnter(e){
     if(e.key === 'Enter'){
         saveValues();
@@ -105,23 +138,43 @@ function saveValues(){
     let box = parseInt(document.getElementById('boxQty').value) || 0;
     let each = parseInt(document.getElementById('eachQty').value) || 0;
 
-    currentItem['박스수'] = box;
-    currentItem['낱개수량'] = each;
+    // 🔥 누적 처리
+    let prev = parseInt(currentItem['실수량']) || 0;
 
-    let total = box + each;
+    let total = prev + box + each;
+
+    currentItem['박스수'] = (parseInt(currentItem['박스수']) || 0) + box;
+    currentItem['낱개수량'] = (parseInt(currentItem['낱개수량']) || 0) + each;
 
     currentItem['실수량'] = total;
     currentItem['차이'] = total - currentItem['재고수량'];
 
-    document.getElementById('result').innerHTML =
-        `✔ 저장됨 (차이: ${currentItem['차이']})`;
+    playBeep();
 
-    // 입력 초기화
+    document.getElementById('result').innerHTML =
+        `✔ 누적 저장 (${currentItem['실수량']})`;
+
+    // 초기화
     document.getElementById('boxQty').value = '';
     document.getElementById('eachQty').value = '';
 
-    // 👉 다시 스캔 대기
     document.getElementById('barcodeInput').focus();
+}
+
+
+// ===== 미입력 보기 =====
+function showMissing(){
+
+    let missing = data.filter(x => !x['실수량']);
+
+    if(missing.length === 0){
+        alert("모두 입력 완료");
+        return;
+    }
+
+    let list = missing.map(x => x['상품명']).join("\\n");
+
+    alert("미입력:\n" + list);
 }
 
 
