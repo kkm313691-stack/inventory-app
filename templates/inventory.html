@@ -5,14 +5,7 @@
 
 <style>
 body { font-size:18px; padding:10px; background:#f5f5f5; }
-
-.card {
-    background:#fff;
-    padding:20px;
-    border-radius:12px;
-    margin:10px 0;
-}
-
+.card { background:#fff; padding:20px; border-radius:12px; margin:10px 0; }
 input, button {
     width:100%;
     padding:16px;
@@ -21,12 +14,7 @@ input, button {
     border-radius:8px;
     box-sizing:border-box;
 }
-
-button {
-    background:#4CAF50;
-    color:white;
-    border:none;
-}
+button { background:#4CAF50; color:white; border:none; }
 </style>
 </head>
 
@@ -34,14 +22,10 @@ button {
 
 <h2>📦 재고조사</h2>
 
-<input id="barcodeInput" placeholder="📷 바코드 스캔" autofocus>
+<input id="barcodeInput" placeholder="📷 바코드 스캔">
 
-<label>
-<input type="checkbox" id="autoMode"> 스캔만으로 +1
-</label>
-
-<button onclick="showMissing()">미입력 보기</button>
-<button onclick="resetLocal()">⚠️ 이어하기 초기화</button>
+<button onclick="downloadExcel()">엑셀 다운로드</button>
+<button onclick="shareLink()">공유 링크 생성</button>
 
 <div id="list"></div>
 
@@ -50,47 +34,7 @@ button {
 let data = {{ data | tojson }};
 let currentItem = null;
 
-
-// =========================
-// 🔥 이어하기 로드
-// =========================
-function loadLocal(){
-
-    let saved = localStorage.getItem("inventory_data");
-
-    if(saved){
-        if(confirm("이전 작업을 이어서 진행하시겠습니까?")){
-            data = JSON.parse(saved);
-        }
-    }
-}
-
-
-// =========================
-// 🔥 자동 저장
-// =========================
-function saveLocal(){
-    localStorage.setItem("inventory_data", JSON.stringify(data));
-}
-
-
-// =========================
-// 🔥 초기화
-// =========================
-function resetLocal(){
-    if(confirm("로컬 데이터를 삭제하시겠습니까?")){
-        localStorage.removeItem("inventory_data");
-        alert("초기화 완료");
-    }
-}
-
-
-// =========================
-// 서버 동기화 + 로컬 저장
-// =========================
-function syncAll(){
-    saveLocal();
-
+function syncServer(){
     fetch('/sync',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
@@ -98,119 +42,77 @@ function syncAll(){
     });
 }
 
-
-// =========================
-// 스캔
-// =========================
 document.getElementById('barcodeInput')
 .addEventListener('keypress', function(e){
     if(e.key === 'Enter'){
-        scan(e.target.value.trim());
+        let code = e.target.value.trim();
         e.target.value = '';
+
+        let item = data.find(x => String(x['바코드']) === code);
+
+        if(!item){
+            alert("상품 없음");
+            return;
+        }
+
+        currentItem = item;
+
+        document.getElementById('list').innerHTML = `
+        <div class="card">
+            <h3>${item['상품명']}</h3>
+            재고수량: ${item['재고수량']}<br><br>
+            박스수:
+            <input id="box">
+            낱개:
+            <input id="each" onkeydown="save(event)">
+        </div>
+        `;
     }
 });
 
-function scan(code){
-
-    let item = data.find(x => String(x['바코드']) === code);
-
-    if(!item){
-        alert("상품 없음");
-        return;
-    }
-
-    let auto = document.getElementById('autoMode').checked;
-
-    if(auto){
-        item['실수량'] += 1;
-        item['차이'] = item['실수량'] - item['재고수량'];
-        syncAll();
-        return;
-    }
-
-    currentItem = item;
-    render();
-}
-
-
-// =========================
-// 렌더
-// =========================
-function render(){
-
-    document.getElementById('list').innerHTML = `
-    <div class="card">
-
-        ${currentItem['로케이션'] ? `📍 ${currentItem['로케이션']}<br>` : ''}
-        <h3>${currentItem['상품명']}</h3>
-        ${currentItem['소비기한'] ? `⏰ ${currentItem['소비기한']}<br>` : ''}
-
-        재고수량: ${currentItem['재고수량']}<br><br>
-
-        박스수:
-        <input id="boxQty" type="tel">
-
-        낱개수량:
-        <input id="eachQty" type="tel" onkeydown="handleEnter(event)">
-
-        <div id="result"></div>
-
-    </div>
-    `;
-}
-
-
-// =========================
-// 저장
-// =========================
-function handleEnter(e){
+function save(e){
     if(e.key === 'Enter'){
-        save();
+
+        let box = parseInt(document.getElementById('box').value) || 0;
+        let each = parseInt(document.getElementById('each').value) || 0;
+
+        currentItem['실수량'] += (box + each);
+        currentItem['차이'] = currentItem['실수량'] - currentItem['재고수량'];
+
+        syncServer();
+
+        document.getElementById('barcodeInput').focus();
     }
 }
 
-function save(){
-
-    let box = parseInt(document.getElementById('boxQty').value) || 0;
-    let each = parseInt(document.getElementById('eachQty').value) || 0;
-
-    currentItem['박스수'] += box;
-    currentItem['낱개수량'] += each;
-
-    currentItem['실수량'] += (box + each);
-    currentItem['차이'] = currentItem['실수량'] - currentItem['재고수량'];
-
-    syncAll();
-
-    document.getElementById('result').innerText = "✔ 저장됨";
-
-    document.getElementById('boxQty').value = '';
-    document.getElementById('eachQty').value = '';
-
-    document.getElementById('barcodeInput').focus();
+function downloadExcel(){
+    fetch('/download',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(data)
+    })
+    .then(r=>r.blob())
+    .then(b=>{
+        let a=document.createElement('a');
+        a.href=URL.createObjectURL(b);
+        a.download='재고조사.xlsx';
+        a.click();
+    });
 }
 
-
-// =========================
-// 미입력 보기
-// =========================
-function showMissing(){
-
-    let missing = data.filter(x => x['실수량'] === 0);
-
-    if(missing.length === 0){
-        alert("모두 입력 완료");
-        return;
-    }
-
-    let list = missing.map(x => x['상품명']).join("\\n");
-
-    alert("미입력:\\n" + list);
+function shareLink(){
+    fetch('/generate_link',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(data)
+    })
+    .then(r=>r.json())
+    .then(r=>{
+        let url = location.origin + r.link;
+        navigator.clipboard.writeText(url);
+        alert("링크 복사됨\n" + url);
+    });
 }
-
-
-// 🔥 최초 실행
-loadLocal();
 
 </script>
 
