@@ -62,7 +62,7 @@ function render(){
     <div class="card">
         ${currentIndex+1} / ${data.length}<br><br>
 
-        로케이션: ${item['로케이션'] || ''}<br>
+        ${item['로케이션'] ? `로케이션: ${item['로케이션']}<br>` : ''}
         상품명: ${item['상품명']}<br>
         ${item['소비기한'] ? `소비기한: ${item['소비기한']}<br>` : ''}
 
