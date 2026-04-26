@@ -41,6 +41,7 @@ button {
 </label>
 
 <button onclick="showMissing()">미입력 보기</button>
+<button onclick="resetLocal()">⚠️ 이어하기 초기화</button>
 
 <div id="list"></div>
 
@@ -50,8 +51,46 @@ let data = {{ data | tojson }};
 let currentItem = null;
 
 
-// ===== 서버 동기화 =====
-function syncServer(){
+// =========================
+// 🔥 이어하기 로드
+// =========================
+function loadLocal(){
+
+    let saved = localStorage.getItem("inventory_data");
+
+    if(saved){
+        if(confirm("이전 작업을 이어서 진행하시겠습니까?")){
+            data = JSON.parse(saved);
+        }
+    }
+}
+
+
+// =========================
+// 🔥 자동 저장
+// =========================
+function saveLocal(){
+    localStorage.setItem("inventory_data", JSON.stringify(data));
+}
+
+
+// =========================
+// 🔥 초기화
+// =========================
+function resetLocal(){
+    if(confirm("로컬 데이터를 삭제하시겠습니까?")){
+        localStorage.removeItem("inventory_data");
+        alert("초기화 완료");
+    }
+}
+
+
+// =========================
+// 서버 동기화 + 로컬 저장
+// =========================
+function syncAll(){
+    saveLocal();
+
     fetch('/sync',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
@@ -60,7 +99,9 @@ function syncServer(){
 }
 
 
-// ===== 스캔 =====
+// =========================
+// 스캔
+// =========================
 document.getElementById('barcodeInput')
 .addEventListener('keypress', function(e){
     if(e.key === 'Enter'){
@@ -83,7 +124,7 @@ function scan(code){
     if(auto){
         item['실수량'] += 1;
         item['차이'] = item['실수량'] - item['재고수량'];
-        syncServer();
+        syncAll();
         return;
     }
 
@@ -92,7 +133,9 @@ function scan(code){
 }
 
 
-// ===== 렌더 =====
+// =========================
+// 렌더
+// =========================
 function render(){
 
     document.getElementById('list').innerHTML = `
@@ -117,7 +160,9 @@ function render(){
 }
 
 
-// ===== 저장 =====
+// =========================
+// 저장
+// =========================
 function handleEnter(e){
     if(e.key === 'Enter'){
         save();
@@ -135,7 +180,7 @@ function save(){
     currentItem['실수량'] += (box + each);
     currentItem['차이'] = currentItem['실수량'] - currentItem['재고수량'];
 
-    syncServer();
+    syncAll();
 
     document.getElementById('result').innerText = "✔ 저장됨";
 
@@ -146,7 +191,9 @@ function save(){
 }
 
 
-// ===== 미입력 보기 =====
+// =========================
+// 미입력 보기
+// =========================
 function showMissing(){
 
     let missing = data.filter(x => x['실수량'] === 0);
@@ -160,6 +207,10 @@ function showMissing(){
 
     alert("미입력:\\n" + list);
 }
+
+
+// 🔥 최초 실행
+loadLocal();
 
 </script>
 
