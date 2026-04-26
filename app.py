@@ -2,18 +2,20 @@ from flask import Flask, render_template, request, send_file, jsonify, redirect,
 import pandas as pd
 from io import BytesIO
 import uuid
-import time
 
 app = Flask(__name__)
 app.secret_key = "ourbox-secret-key"
 
+# 계정
 WORKER_ID = "김경민"
 WORKER_PW = "ourbox"
 
 ADMIN_ID = "김경민"
 ADMIN_PW = "ourbox123"
 
+# 데이터 저장
 current_data = []
+shared_store = {}
 
 
 def login_required(role=None):
@@ -99,6 +101,48 @@ def sync():
     return "ok"
 
 
+@app.route("/download", methods=["POST"])
+@login_required()
+def download():
+    df = pd.DataFrame(request.get_json())
+    df["차이"] = df["실수량"] - df["재고수량"]
+
+    output = BytesIO()
+    df.to_excel(output, index=False)
+    output.seek(0)
+
+    return send_file(output, as_attachment=True, download_name="재고조사.xlsx")
+
+
+@app.route("/generate_link", methods=["POST"])
+@login_required()
+def generate_link():
+    data = request.get_json()
+
+    df = pd.DataFrame(data)
+
+    output = BytesIO()
+    df.to_excel(output, index=False)
+    output.seek(0)
+
+    key = str(uuid.uuid4())
+    shared_store[key] = output
+
+    return jsonify({"link": f"/share/{key}"})
+
+
+@app.route("/share/<key>")
+def share(key):
+    file = shared_store.get(key)
+
+    if not file:
+        return "파일 없음"
+
+    file.seek(0)
+
+    return send_file(file, as_attachment=True, download_name="재고공유.xlsx")
+
+
 @app.route("/current_data")
 @login_required("admin")
 def current_data_view():
@@ -119,7 +163,7 @@ def admin_download():
 
     current_data = []
 
-    return send_file(output, as_attachment=True, download_name="재고조사_최종.xlsx")
+    return send_file(output, as_attachment=True, download_name="최종.xlsx")
 
 
 if __name__ == "__main__":
