@@ -21,14 +21,25 @@ body {
 
 h2 { margin-bottom:20px; }
 
+/* 🔥 핵심: input + button 동일하게 */
 button, input {
     width:100%;
     padding:16px;
     margin:8px 0;
     font-size:18px;
     border-radius:8px;
+    box-sizing:border-box;   /* 👉 이게 핵심 */
 }
 
+input {
+    border:1px solid #ccc;
+}
+
+button {
+    border:none;
+}
+
+/* 역할 버튼 */
 .role-btn {
     background:#eee;
 }
