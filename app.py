@@ -14,10 +14,9 @@ WORKER_PW = "ourbox"
 ADMIN_ID = "김경민"
 ADMIN_PW = "ourbox123"
 
-# 데이터
+# 데이터 (메모리)
 current_data = []
 shared_store = {}
-
 
 # =========================
 # 로그인 체크
@@ -33,7 +32,6 @@ def login_required(role=None):
         wrapper.__name__ = func.__name__
         return wrapper
     return decorator
-
 
 # =========================
 # 로그인
@@ -59,7 +57,6 @@ def login():
 
     return render_template("login.html")
 
-
 # =========================
 # 페이지
 # =========================
@@ -68,12 +65,10 @@ def login():
 def index():
     return render_template("upload.html")
 
-
 @app.route("/admin")
 @login_required("admin")
 def admin_page():
     return render_template("admin.html")
-
 
 # =========================
 # 업로드
@@ -88,6 +83,7 @@ def upload():
     df = pd.read_excel(file, engine="openpyxl", dtype=str)
     df.columns = df.columns.str.strip()
 
+    # 필수/선택 컬럼 보정
     for col in ["상품명", "재고수량", "바코드", "로케이션", "소비기한"]:
         if col not in df.columns:
             df[col] = ""
@@ -95,18 +91,19 @@ def upload():
     df = df[["상품명", "재고수량", "바코드", "로케이션", "소비기한"]]
     df["재고수량"] = pd.to_numeric(df["재고수량"], errors="coerce").fillna(0)
 
+    # 작업용 필드
     df["박스수"] = 0
     df["낱개수량"] = 0
     df["실수량"] = 0
     df["차이"] = 0
+    df["logs"] = [[] for _ in range(len(df))]  # 🔥 로그 저장
 
     current_data = df.to_dict(orient="records")
 
     return render_template("inventory.html", data=current_data)
 
-
 # =========================
-# 실시간 저장
+# 실시간 동기화
 # =========================
 @app.route("/sync", methods=["POST"])
 @login_required("worker")
@@ -115,22 +112,76 @@ def sync():
     current_data = request.get_json()
     return "ok"
 
-
 # =========================
-# 다운로드
+# 🔥 다운로드 (로그 + 집계 2시트)
 # =========================
 @app.route("/download", methods=["POST"])
 @login_required()
 def download():
-    df = pd.DataFrame(request.get_json())
-    df["차이"] = df["실수량"] - df["재고수량"]
 
+    raw = request.get_json()
+
+    log_rows = []
+
+    # 🔥 상세 로그 생성
+    for item in raw:
+
+        logs = item.get("logs", [])
+
+        for log in logs:
+            box = int(log.get("박스수", 0))
+            each = int(log.get("낱개수량", 0))
+
+            if box == 0 and each == 0:
+                continue
+
+            row = {
+                "바코드": item.get("바코드", ""),
+                "상품명": item.get("상품명", ""),
+                "재고수량": item.get("재고수량", 0),
+                "박스수": box,
+                "낱개수량": each
+            }
+
+            if item.get("로케이션"):
+                row["로케이션"] = item.get("로케이션")
+
+            if item.get("소비기한"):
+                row["소비기한"] = item.get("소비기한")
+
+            log_rows.append(row)
+
+    df_log = pd.DataFrame(log_rows)
+
+    if df_log.empty:
+        df_log = pd.DataFrame(columns=["바코드","상품명","재고수량","박스수","낱개수량"])
+
+    # 컬럼 순서
+    base_cols = ["바코드", "상품명", "재고수량", "박스수", "낱개수량"]
+    extra_cols = [c for c in df_log.columns if c not in base_cols]
+    df_log = df_log[base_cols + extra_cols]
+
+    # 🔥 집계 시트
+    df_sum = df_log.copy()
+    if not df_sum.empty:
+        df_sum["총수량"] = df_sum["박스수"] + df_sum["낱개수량"]
+        df_sum = df_sum.groupby(
+            ["바코드", "상품명", "재고수량"], as_index=False
+        ).agg({
+            "박스수": "sum",
+            "낱개수량": "sum",
+            "총수량": "sum"
+        })
+
+    # 🔥 엑셀 2시트 생성
     output = BytesIO()
-    df.to_excel(output, index=False)
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df_log.to_excel(writer, index=False, sheet_name="상세로그")
+        df_sum.to_excel(writer, index=False, sheet_name="집계")
+
     output.seek(0)
 
     return send_file(output, as_attachment=True, download_name="재고조사.xlsx")
-
 
 # =========================
 # 공유 생성 (30분)
@@ -158,7 +209,7 @@ def generate_link():
 
 
 # =========================
-# 공유 다운로드 (만료 체크)
+# 공유 다운로드 (만료)
 # =========================
 @app.route("/share/<key>")
 def share(key):
@@ -168,7 +219,6 @@ def share(key):
     if not item:
         return "링크 없음"
 
-    # 30분 = 1800초
     if time.time() - item["time"] > 1800:
         del shared_store[key]
         return "링크 만료"
@@ -181,26 +231,20 @@ def share(key):
         download_name="재고공유.xlsx"
     )
 
-
 # =========================
-# 관리자 재고 조회
+# 관리자 기능
 # =========================
 @app.route("/current_data")
 @login_required("admin")
 def current_data_view():
     return jsonify(current_data)
 
-
-# =========================
-# 관리자 다운로드 + 초기화
-# =========================
 @app.route("/admin_download", methods=["POST"])
 @login_required("admin")
 def admin_download():
     global current_data
 
     df = pd.DataFrame(current_data)
-    df["차이"] = df["실수량"] - df["재고수량"]
 
     output = BytesIO()
     df.to_excel(output, index=False)
@@ -210,10 +254,6 @@ def admin_download():
 
     return send_file(output, as_attachment=True, download_name="최종.xlsx")
 
-
-# =========================
-# 공유 목록 (관리자)
-# =========================
 @app.route("/shared_list")
 @login_required("admin")
 def shared_list():
@@ -236,10 +276,6 @@ def shared_list():
 
     return jsonify(result)
 
-
-# =========================
-# 공유 삭제 (관리자)
-# =========================
 @app.route("/delete_share/<key>", methods=["POST"])
 @login_required("admin")
 def delete_share(key):
@@ -250,8 +286,5 @@ def delete_share(key):
     return "ok"
 
 
-# =========================
-# 실행
-# =========================
 if __name__ == "__main__":
     app.run()
