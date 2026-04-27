@@ -4,53 +4,94 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <style>
-body { padding:10px; font-size:18px; background:#f5f5f5; }
-button { width:100%; padding:16px; margin:5px 0; font-size:18px; }
-.card { background:#fff; padding:15px; margin:5px 0; }
+body { font-size:18px; padding:20px; background:#f5f5f5; }
+
+.card {
+    background:#fff;
+    padding:20px;
+    margin:10px 0;
+    border-radius:10px;
+}
+
+button {
+    width:100%;
+    padding:14px;
+    margin-top:10px;
+    font-size:18px;
+    border:none;
+    border-radius:8px;
+    background:#4CAF50;
+    color:white;
+}
 </style>
 </head>
 
 <body>
 
-<h2>🛠 관리자 페이지</h2>
+<h2>관리자 페이지</h2>
 
-<button onclick="loadData()">새로고침</button>
-<button onclick="downloadAndReset()">다운로드 + 초기화</button>
+<div class="card">
+    <h3>서버 데이터</h3>
+    <div id="dataCount"></div>
+    <button onclick="clearData()">전체 삭제</button>
+</div>
 
-<div id="list"></div>
+<div class="card">
+    <h3>공유 링크</h3>
+    <div id="shareList"></div>
+</div>
 
 <script>
 
 function loadData(){
-    fetch('/current_data')
+    fetch('/admin_data_list')
     .then(r=>r.json())
-    .then(data=>{
-
-        let html = data.map(d => `
-        <div class="card">
-            ${d['상품명']} - ${d['실수량'] || 0}
-        </div>
-        `).join('');
-
-        document.getElementById('list').innerHTML = html;
+    .then(d=>{
+        document.getElementById('dataCount').innerText =
+            "현재 데이터 수: " + d.count;
     });
 }
 
-function downloadAndReset(){
+function clearData(){
+    if(!confirm("전체 삭제하시겠습니까?")) return;
 
-    fetch('/admin_download', { method:'POST' })
-    .then(r=>r.blob())
-    .then(b=>{
-        let a=document.createElement('a');
-        a.href=URL.createObjectURL(b);
-        a.download='최종.xlsx';
-        a.click();
-
-        loadData(); // 초기화 확인
+    fetch('/admin_clear_data',{method:'POST'})
+    .then(()=>{
+        alert("삭제 완료");
+        loadData();
     });
 }
+
+function loadShares(){
+    fetch('/shared_list')
+    .then(r=>r.json())
+    .then(list=>{
+        let html = "";
+        list.forEach(item=>{
+            html += `
+            <div class="card">
+                <div>${item.key}</div>
+                <div>남은시간: ${item.remain}초</div>
+                <button onclick="deleteShare('${item.key}')">삭제</button>
+            </div>
+            `;
+        });
+        document.getElementById('shareList').innerHTML = html;
+    });
+}
+
+function deleteShare(key){
+    fetch('/delete_share/'+key,{method:'POST'})
+    .then(()=> loadShares());
+}
+
+setInterval(()=>{
+    loadData();
+    loadShares();
+},3000);
 
 loadData();
+loadShares();
 
 </script>
 
