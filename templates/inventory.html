@@ -4,7 +4,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <style>
-body { font-size:18px; padding:10px; background:#f5f5f5; }
+body {
+    font-size:18px;
+    padding:10px;
+    background:#f5f5f5;
+}
 
 .card {
     background:#fff;
@@ -111,11 +115,11 @@ function render(){
     document.getElementById('list').innerHTML = `
     <div class="card">
 
-        ${currentItem['로케이션'] ? `📍 ${currentItem['로케이션']}<br>` : ''}
+        ${currentItem['로케이션'] ? `<div>로케이션: ${currentItem['로케이션']}</div>` : ''}
         <h3>${currentItem['상품명']}</h3>
-        ${currentItem['소비기한'] ? `⏰ ${currentItem['소비기한']}<br>` : ''}
+        ${currentItem['소비기한'] ? `<div>소비기한: ${currentItem['소비기한']}</div>` : ''}
 
-        재고수량: ${currentItem['재고수량']}<br><br>
+        <div>재고수량: ${currentItem['재고수량']}</div><br>
 
         박스수:
         <input id="box" type="tel">
@@ -143,16 +147,26 @@ function handleEnter(e){
 
 
 // =========================
-// 저장
+// 저장 (로그 방식)
 // =========================
 function save(){
 
     let box = parseInt(document.getElementById('box').value) || 0;
     let each = parseInt(document.getElementById('each').value) || 0;
 
+    // 🔥 로그 기록 (핵심)
+    if(!currentItem['logs']){
+        currentItem['logs'] = [];
+    }
+
+    currentItem['logs'].push({
+        박스수: box,
+        낱개수량: each
+    });
+
+    // 화면 표시용 누적
     currentItem['박스수'] += box;
     currentItem['낱개수량'] += each;
-
     currentItem['실수량'] += (box + each);
     currentItem['차이'] = currentItem['실수량'] - currentItem['재고수량'];
 
